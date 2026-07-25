@@ -1,0 +1,166 @@
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "../store";
+import { attendanceApi } from "../store/attendanceApi";
+import { chatApi, type Message } from "../store/chatApi";
+import { notificationApi } from "../store/notificationApi";
+import { rolesApi } from "../store/rolesApi";
+import { connectSocket, disconnectSocket } from "../store/socket";
+import { setOnlineList, userOnline, userOffline, resetPresence } from "../store/presenceSlice";
+
+// Pull a user id out of the various shapes a presence payload might take.
+const idOf = (p: unknown): string | undefined => {
+  if (!p) return undefined;
+  if (typeof p === "string") return p;
+  const o = p as { userId?: string; _id?: string; id?: string; user_id?: string };
+  return o.userId || o._id || o.id || o.user_id;
+};
+
+/**
+ * App-wide realtime bridge. Opens one authenticated Socket.IO connection and
+ * refreshes the affected RTK Query caches when backend events arrive — so an
+ * attendance punch made anywhere (mobile app, another admin, kiosk) reflects
+ * live in this UI without a manual refresh.
+ *
+ * Backend emits `ATTENDANCE_EVENT` to the punching user's room AND to the
+ * ADMIN / SUPER_ADMIN / MANAGER role rooms, so supervisors see team punches
+ * and employees see their own — both invalidate here.
+ */
+export function useRealtime() {
+  const dispatch = useAppDispatch();
+  const token = useAppSelector((s) => s.auth.accessToken);
+  const myId = useAppSelector((s) => s.auth.user?._id);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const socket = connectSocket(token);
+
+    const refreshAttendance = () => {
+      dispatch(
+        attendanceApi.util.invalidateTags([
+          "MyToday",
+          "Attendance",
+          "Analytics",
+          "Regularizations",
+        ])
+      );
+    };
+
+    // A direct message was created OR updated (new text, or a reaction toggled),
+    // to me or by me from another device. Patch it straight into the accumulated
+    // conversation cache instead of invalidating — invalidation would refetch
+    // with the last cursor arg and disturb an open chat scrolled into history.
+    // Upsert by _id: replace if present (edit/reaction), else append (new msg).
+    const onMessage = (msg: Message) => {
+      const senderId = typeof msg.sender_id === "string" ? msg.sender_id : msg.sender_id?._id;
+      const receiverId = typeof msg.receiver_id === "string" ? msg.receiver_id : msg.receiver_id?._id;
+      // The other party in this conversation (relative to me).
+      const partner = String(senderId) === String(myId) ? receiverId : senderId;
+      dispatch(chatApi.util.invalidateTags(["Threads"]));
+      if (partner) {
+        dispatch(
+          chatApi.util.updateQueryData("getConversation", { userId: String(partner) }, (draft) => {
+            const i = draft.items.findIndex((m) => m._id === msg._id);
+            if (i >= 0) draft.items[i] = msg;
+            else draft.items.push(msg);
+          })
+        );
+      }
+    };
+
+    // I read a conversation (here or on another device) → the server cleared the
+    // unread flags and echoed MESSAGES_READ back to me. Refresh ONLY threads so
+    // the unread badge drops live.
+    //
+    // Do NOT invalidate the Conversation cache here: fetching a conversation
+    // itself marks it read and re-emits MESSAGES_READ, so invalidating it would
+    // refetch → re-emit → refetch … an infinite loop. The reader's own read
+    // echo carries no new message content, so there's nothing to refetch.
+    const onRead = () => {
+      dispatch(chatApi.util.invalidateTags(["Threads"]));
+    };
+
+    /* ── Presence ──────────────────────────────────────────────────────
+     * Backend should emit a snapshot on join and online/offline deltas.
+     * We listen defensively across the common event names so it lights up
+     * regardless of the exact contract, normalising the payload shape. */
+    const onSnapshot = (list: unknown) => {
+      const arr = Array.isArray(list) ? list : (list as { users?: unknown[] })?.users || [];
+      const ids = (arr as unknown[]).map(idOf).filter(Boolean) as string[];
+      dispatch(setOnlineList(myId ? [...ids, String(myId)] : ids));
+    };
+    const onOnline = (p: unknown) => { const id = idOf(p); if (id) dispatch(userOnline(id)); };
+    const onOffline = (p: unknown) => { const id = idOf(p); if (id) dispatch(userOffline(id)); };
+
+    // Announce myself + ask for the current roster of online users.
+    const announce = () => {
+      if (myId) dispatch(userOnline(String(myId)));
+      socket.emit("PRESENCE_SUBSCRIBE");
+      socket.emit("presence:subscribe");
+    };
+
+    const SNAPSHOT_EVENTS = ["PRESENCE_STATE", "ONLINE_USERS", "presence:list", "PRESENCE_LIST"];
+    const ONLINE_EVENTS = ["PRESENCE_ONLINE", "USER_ONLINE", "presence:online"];
+    const OFFLINE_EVENTS = ["PRESENCE_OFFLINE", "USER_OFFLINE", "presence:offline"];
+
+    SNAPSHOT_EVENTS.forEach((e) => socket.on(e, onSnapshot));
+    ONLINE_EVENTS.forEach((e) => socket.on(e, onOnline));
+    OFFLINE_EVENTS.forEach((e) => socket.on(e, onOffline));
+
+    socket.on("connect", announce);
+    if (socket.connected) announce();
+
+    socket.on("ATTENDANCE_EVENT", refreshAttendance);
+    socket.on("MESSAGE_CREATED", onMessage);
+    socket.on("MESSAGE_UPDATED", onMessage);
+    socket.on("MESSAGES_READ", onRead);
+    // A regularization was raised / reviewed elsewhere → refresh so every
+    // supervisor (and the employee) sees the new status live.
+    socket.on("REGULARIZATION_REQUESTED", refreshAttendance);
+    socket.on("REGULARIZATION_REVIEWED", refreshAttendance);
+
+    // Notifications — a new one arrived / changed / was cleared. Refresh the
+    // bell badge + the panel/page list live.
+    const refreshNotifs = () =>
+      dispatch(notificationApi.util.invalidateTags(["Notifications", "Unread"]));
+    const NOTIF_EVENTS = [
+      "NOTIFICATION_CREATED",
+      "NOTIFICATION_UPDATED",
+      "NOTIFICATION_DELETED",
+      "NOTIFICATIONS_ALL_READ",
+    ];
+    NOTIF_EVENTS.forEach((e) => socket.on(e, refreshNotifs));
+
+    // Roles / permissions changed anywhere (an admin edited a role) → refresh
+    // the role list AND every connected user's live permissions, so an
+    // already-logged-in user's UI access updates instantly — no re-login.
+    const refreshRoles = () =>
+      dispatch(rolesApi.util.invalidateTags(["Role", "MyPermissions"]));
+    const ROLE_EVENTS = [
+      "ROLE_CREATED",
+      "ROLE_UPDATED",
+      "ROLE_DELETED",
+      "PERMISSION_CREATED",
+      "PERMISSION_UPDATED",
+      "PERMISSION_DELETED",
+    ];
+    ROLE_EVENTS.forEach((e) => socket.on(e, refreshRoles));
+
+    return () => {
+      ROLE_EVENTS.forEach((e) => socket.off(e, refreshRoles));
+      NOTIF_EVENTS.forEach((e) => socket.off(e, refreshNotifs));
+      socket.off("ATTENDANCE_EVENT", refreshAttendance);
+      socket.off("MESSAGE_CREATED", onMessage);
+      socket.off("MESSAGE_UPDATED", onMessage);
+      socket.off("MESSAGES_READ", onRead);
+      socket.off("REGULARIZATION_REQUESTED", refreshAttendance);
+      socket.off("REGULARIZATION_REVIEWED", refreshAttendance);
+      socket.off("connect", announce);
+      SNAPSHOT_EVENTS.forEach((e) => socket.off(e, onSnapshot));
+      ONLINE_EVENTS.forEach((e) => socket.off(e, onOnline));
+      OFFLINE_EVENTS.forEach((e) => socket.off(e, onOffline));
+      dispatch(resetPresence());
+      disconnectSocket();
+    };
+  }, [token, dispatch, myId]);
+}
