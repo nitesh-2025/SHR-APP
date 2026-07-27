@@ -20,18 +20,34 @@ const REFRESH_TOKEN_KEY = 'hrms_refresh_token';
 const USER_KEY = 'hrms:user';
 const REMEMBER_KEY = 'hrms:remembered_email';
 
+/**
+ * Flat view of the signed-in user. The server sends a populated Mongo document
+ * (`role` / `department_id` as objects) — `normalizeAuthUser` flattens it onto
+ * this shape before anything stores or reads it.
+ */
 export interface AuthUser {
   _id: string;
   employee_id?: string;
   first_name?: string;
   last_name?: string;
   email: string;
+  /** Role CODE (e.g. `ADMIN`) — what the RBAC checks compare against. */
   role?: string;
+  /** Human label for the role (e.g. `Admin`), display only. */
+  role_name?: string;
   /** Profile photo URL. Absent for most users — the UI falls back to initials. */
   profile_photo?: string | null;
+  /** Same URL under the key the API actually sends. Kept in sync by the normalizer. */
+  profile_image?: string | null;
   /** Live permission keys for the user's role (from login response). */
   permissions?: string[];
   department_id?: string;
+  department_name?: string;
+  designation?: string;
+  status?: 'active' | 'inactive' | 'suspended';
+  phone?: string;
+  location?: string;
+  last_login_at?: string;
   /** Device classes this user may sign in from. Empty/absent = no restriction. */
   allowed_devices?: DeviceType[];
 }

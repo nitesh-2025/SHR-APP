@@ -302,14 +302,16 @@ export function Toaster() {
 
   return (
     <View
-      // `pointerEvents="box-none"` so the area behind the stack stays tappable.
-      pointerEvents="box-none"
       // Positioning stays in a plain style object, NOT utility classes: if
       // NativeWind fails to process `absolute` (stale cache, misconfigured
       // content globs) the stack silently falls back into normal flow and lands
       // at the bottom of the tree instead of floating. A style object cannot
       // regress that way.
       style={{
+        // `box-none` keeps the area behind the stack tappable. It lives in the
+        // style object, not as a prop — the `pointerEvents` PROP is deprecated
+        // in RN 0.76+ and logs a warning on every render.
+        pointerEvents: 'box-none',
         position: 'absolute',
         top: insets.top + 8,
         left: 16,

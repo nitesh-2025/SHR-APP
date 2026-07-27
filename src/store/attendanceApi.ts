@@ -194,7 +194,10 @@ type RosterArgs = {
   limit?: number;
 };
 
-const APP = "web-portal";
+// Stamped on every punch and shown back to the user as the "Device" row on the
+// attendance detail. This is the native app, not the web portal — the value was
+// copied over from StaffCore and made every mobile punch read as "web-portal".
+const APP = "mobile-app";
 
 export const attendanceApi = createApi({
   reducerPath: "attendanceApi",

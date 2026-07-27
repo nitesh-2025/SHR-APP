@@ -8,36 +8,34 @@ import {
   Gift,
   LifeBuoy,
   LogOut,
+  Moon,
+  Sun,
+  SunMoon,
   Users,
   X,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useEffect } from 'react';
-import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar, fullNameOf } from './Avatar';
+import { BottomSheet } from './BottomSheet';
 import { selectCurrentUser, useAppDispatch, useAppSelector } from '../store';
 import { clearCredentials } from '../store/authSlice';
+import { danger, radius, space } from '../theme/colors';
+import { useTheme, type ThemeMode } from '../theme/ThemeProvider';
 
 interface MenuEntry {
   key: string;
   label: string;
   icon: LucideIcon;
-  /** Screen not built yet — shown with a badge instead of firing a toast. */
+  /** Screen not built yet — labelled, not badged. */
   soon?: boolean;
 }
 
 // Order follows how often an employee reaches for each one, not alphabetical.
 const MENU: MenuEntry[] = [
-  { key: 'leaves', label: 'My Leaves', icon: ClipboardList, soon: true },
-  { key: 'attendance', label: 'Attendance', icon: CalendarDays, soon: true },
+  { key: 'leaves', label: 'My Leaves', icon: ClipboardList },
+  { key: 'attendance', label: 'Attendance', icon: CalendarDays },
   { key: 'meeting', label: 'Meeting', icon: Users, soon: true },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays, soon: true },
   { key: 'tickets', label: 'Tickets', icon: LifeBuoy, soon: true },
@@ -46,12 +44,14 @@ const MENU: MenuEntry[] = [
   { key: 'asset', label: 'Asset Request', icon: Boxes, soon: true },
 ];
 
-const OPEN_MS = 260;
-const CLOSE_MS = 200;
-
+/**
+ * Menu row. Plain icon, plain label — no tinted well and no badge: eight rows
+ * each carrying a coloured tile and a pill is what made this list feel loud.
+ */
 function Row({ entry, onPress }: { entry: MenuEntry; onPress: () => void }) {
   const Icon = entry.icon;
   const soon = Boolean(entry.soon);
+  const { c, brand } = useTheme();
 
   return (
     <Pressable
@@ -61,78 +61,121 @@ function Row({ entry, onPress }: { entry: MenuEntry; onPress: () => void }) {
       accessibilityLabel={entry.label}
       accessibilityState={{ disabled: soon }}
       accessibilityHint={soon ? 'Coming soon' : undefined}
-      android_ripple={soon ? undefined : { color: 'rgba(47,143,44,0.10)' }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      className="flex-row items-center gap-3.5 rounded-2xl px-3 py-3.5"
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      className="h-12 flex-row items-center gap-3.5"
     >
-      <View
-        className={`h-10 w-10 items-center justify-center rounded-xl ${
-          soon ? 'bg-slate-100' : 'bg-brand-50'
-        }`}
-      >
-        <Icon size={19} strokeWidth={2} color={soon ? '#94a3b8' : '#2f8f2c'} />
-      </View>
+      <Icon size={19} strokeWidth={2} color={soon ? c.textFaint : brand[600]} />
+
       <Text
-        className={`flex-1 font-ui text-[15px] ${soon ? 'text-slate-400' : 'text-slate-800'}`}
+        style={{ color: soon ? c.textFaint : c.text }}
+        className="flex-1 font-ui text-[15px]"
       >
         {entry.label}
       </Text>
 
-      {/* State is declared up front, so a tap never has to explain itself with
-          a toast — the user knows before touching it. */}
       {soon ? (
-        <View className="rounded-full bg-slate-100 px-2 py-0.5">
-          <Text className="font-ui-semibold text-[10px] uppercase tracking-wide text-slate-400">
-            Soon
-          </Text>
-        </View>
+        <Text style={{ color: c.textFaint }} className="font-ui-regular text-[11.5px]">
+          Soon
+        </Text>
       ) : (
-        <ChevronRight size={17} strokeWidth={2} color="#cbd5e1" />
+        <ChevronRight size={17} strokeWidth={2} color={c.textFaint} />
       )}
     </Pressable>
   );
 }
 
+/* ── Settings rows ────────────────────────────────────────────────────────── */
+
+function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const { c } = useTheme();
+  return (
+    <View className="h-12 flex-row items-center justify-between">
+      <Text style={{ color: c.textMuted }} className="font-ui text-[14px]">
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+// The accent swatch row was removed deliberately: one primary colour is the
+// whole point of the design system, and a five-colour picker in the drawer both
+// undercut that and rendered as empty circles on device. The theme ramps still
+// exist in `theme/themes.ts` — flip `DEFAULT_THEME` to re-skin the app in one
+// line, without giving every user a knob for it.
+
+/** Light / dark / follow-system. Three states, so a toggle would not do. */
+function ModePicker() {
+  const { mode, setMode, c, brand } = useTheme();
+  const OPTIONS: { key: ThemeMode; label: string; icon: LucideIcon }[] = [
+    { key: 'light', label: 'Light', icon: Sun },
+    { key: 'dark', label: 'Dark', icon: Moon },
+    { key: 'system', label: 'Auto', icon: SunMoon },
+  ];
+
+  return (
+    <SettingRow label="Appearance">
+      <View
+        style={{ backgroundColor: c.fill, borderRadius: radius.pill }}
+        className="flex-row p-0.5"
+      >
+        {OPTIONS.map(({ key, label, icon: Icon }) => {
+          const active = mode === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => setMode(key)}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} appearance`}
+              accessibilityState={{ selected: active }}
+              style={({ pressed }) => ({
+                // Selected pill is the CARD colour, not the accent: three
+                // coloured segments in a row read as a warning strip.
+                backgroundColor: active ? c.card : 'transparent',
+                borderRadius: radius.pill,
+                opacity: pressed ? 0.7 : 1,
+              })}
+              className="flex-row items-center gap-1 px-2.5 py-1.5"
+            >
+              <Icon
+                size={13}
+                strokeWidth={2}
+                color={active ? brand[600] : c.textFaint}
+              />
+              <Text
+                style={{ color: active ? c.text : c.textFaint }}
+                className="font-ui-semibold text-[11.5px]"
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </SettingRow>
+  );
+}
+
 /**
- * Right-hand navigation drawer. Slides in from the right edge; the scrim fades
- * with it so the two never look like separate events.
- *
- * `Modal` keeps it above the navigator without threading state through every
- * screen, and gives hardware-back handling on Android for free.
+ * App menu. Rises from the bottom like every other overlay (see `BottomSheet`)
+ * rather than sliding in from the right — one motion language, and the rows sit
+ * inside thumb reach instead of up against the top edge.
  */
 export function AppDrawer({
   visible,
   onClose,
+  onNavigate,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Called with a `MENU` key for entries that have a screen. */
+  onNavigate?: (key: string) => void;
 }) {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectCurrentUser);
+  const { c } = useTheme();
 
-  const panelWidth = Math.min(width * 0.82, 340);
-
-  // 1 = fully off-screen right, 0 = open. One value drives both the panel slide
-  // and the scrim fade, so they cannot drift apart.
-  const shut = useSharedValue(1);
-
-  useEffect(() => {
-    shut.value = withTiming(visible ? 0 : 1, {
-      duration: visible ? OPEN_MS : CLOSE_MS,
-      easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.quad),
-    });
-  }, [visible, shut]);
-
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shut.value * panelWidth }],
-  }));
-
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: 1 - shut.value }));
-
-  const version =
-    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? '1.0.0';
+  const version = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? '1.0.0';
 
   const handleLogout = () => {
     // Close first: the navigator unmounts this tree as soon as the session
@@ -141,111 +184,101 @@ export function AppDrawer({
     dispatch(clearCredentials());
   };
 
-  // Wired for when the screens land: `Row` disables anything flagged `soon`,
-  // so this only ever runs for a destination that actually exists.
-  const openEntry = (_entry: MenuEntry) => {
+  // `Row` disables anything flagged `soon`, so this only ever runs for a
+  // destination that actually exists. Close first, then navigate — pushing a
+  // screen under an open modal leaves the sheet floating over it.
+  const openEntry = (entry: MenuEntry) => {
     onClose();
+    onNavigate?.(entry.key);
   };
 
+  const designation = user?.designation || user?.role_name || user?.role;
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={{ flex: 1 }}>
-        <Animated.View style={[{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)' }, scrimStyle]}>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close menu"
-            style={{ flex: 1 }}
-          />
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              right: 0,
-              width: panelWidth,
-              paddingTop: insets.top + 14,
-              paddingBottom: insets.bottom + 14,
-              shadowColor: '#0f172a',
-              shadowOpacity: 0.18,
-              shadowRadius: 24,
-              shadowOffset: { width: -8, height: 0 },
-              elevation: 16,
-            },
-            panelStyle,
-          ]}
-          className="bg-white"
-        >
-          {/* ── Header ─────────────────────────────────────────────────── */}
-          <View className="flex-row items-center gap-3 px-5 pb-4">
-            <Avatar user={user} size={46} />
-            <View className="flex-1">
-              <Text
-                className="font-ui-semibold text-[15px] text-slate-900"
-                numberOfLines={1}
-              >
-                {fullNameOf(user)}
-              </Text>
-              <Text className="font-ui-regular text-xs text-slate-500" numberOfLines={1}>
-                {user?.role ? `${user.role} · ` : ''}
-                {user?.email}
-              </Text>
-            </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Close menu"
-              className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
-            >
-              <X size={16} strokeWidth={2.2} color="#64748b" />
-            </Pressable>
-          </View>
-
-          <View className="mx-5 h-px bg-slate-100" />
-
-          {/* ── Items ──────────────────────────────────────────────────── */}
-          <ScrollView
-            className="flex-1 px-2"
-            contentContainerStyle={{ paddingVertical: 8 }}
-            showsVerticalScrollIndicator={false}
+    <BottomSheet visible={visible} onClose={onClose}>
+      {/* ── Header ───────────────────────────────────────────────────────
+          A plain row, not a floating card: a shadowed card here sat ON TOP of
+          the scrolling list and clipped the first item behind it. */}
+      <View
+        style={{ paddingHorizontal: space.screen, paddingBottom: space.lg }}
+        className="flex-row items-center gap-3"
+      >
+        <Avatar user={user} size={44} />
+        <View className="flex-1">
+          <Text
+            style={{ color: c.text }}
+            className="font-ui-semibold text-[15px]"
+            numberOfLines={1}
           >
-            {MENU.map((entry) => (
-              <Row key={entry.key} entry={entry} onPress={() => openEntry(entry)} />
-            ))}
-          </ScrollView>
-
-          {/* ── Footer ─────────────────────────────────────────────────── */}
-          <View className="mx-5 h-px bg-slate-100" />
-
-          <View className="px-5 pt-3">
-            <Pressable
-              onPress={handleLogout}
-              accessibilityRole="button"
-              accessibilityLabel="Log out"
-              android_ripple={{ color: 'rgba(239,68,68,0.10)' }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              className="h-12 flex-row items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50"
-            >
-              <LogOut size={17} strokeWidth={2.1} color="#e11d48" />
-              <Text className="font-ui-semibold text-[14px] text-rose-600">Log out</Text>
-            </Pressable>
-
-            <Text className="mt-3 text-center font-ui-regular text-[11px] text-slate-400">
-              SHR · Version {version}
-            </Text>
-          </View>
-        </Animated.View>
+            {fullNameOf(user)}
+          </Text>
+          <Text
+            style={{ color: c.textMuted }}
+            className="font-ui-regular text-[12.5px]"
+            numberOfLines={1}
+          >
+            {[designation, user?.department_name].filter(Boolean).join(' · ') || user?.email}
+          </Text>
+        </View>
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Close menu"
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, backgroundColor: c.fill })}
+          className="h-8 w-8 items-center justify-center rounded-full"
+        >
+          <X size={16} strokeWidth={2} color={c.textMuted} />
+        </Pressable>
       </View>
-    </Modal>
+
+      <View style={{ height: 1, backgroundColor: c.border }} />
+
+      {/* ── Items ────────────────────────────────────────────────────── */}
+      <ScrollView
+        // `shrink`: inside a height-capped column the list must give way to the
+        // footer instead of pushing it off the sheet.
+        className="shrink"
+        contentContainerStyle={{ paddingHorizontal: space.screen, paddingVertical: space.sm }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {MENU.map((entry) => (
+          <Row key={entry.key} entry={entry} onPress={() => openEntry(entry)} />
+        ))}
+      </ScrollView>
+
+      <View style={{ height: 1, backgroundColor: c.border }} />
+
+      {/* ── Footer ───────────────────────────────────────────────────── */}
+      <View style={{ paddingHorizontal: space.screen }}>
+        <ModePicker />
+
+        <Pressable
+          onPress={handleLogout}
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.7 : 1,
+            backgroundColor: c.fill,
+            borderRadius: radius.button,
+            marginTop: space.sm,
+          })}
+          className="h-12 flex-row items-center justify-center gap-2"
+        >
+          <LogOut size={17} strokeWidth={2} color={danger[500]} />
+          <Text style={{ color: danger[600] }} className="font-ui-semibold text-[14px]">
+            Log out
+          </Text>
+        </Pressable>
+
+        <Text
+          style={{ color: c.textFaint }}
+          className="mt-2.5 text-center font-ui-regular text-[11px]"
+        >
+          SHR · Version {version}
+        </Text>
+      </View>
+    </BottomSheet>
   );
 }

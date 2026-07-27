@@ -41,8 +41,12 @@ export const hydrateFromSession = createAsyncThunk(
   'auth/hydrateFromSession',
   async (): Promise<Session> => {
     const session = await readSession();
-    // Don't restore an already-expired session — bounce straight to Login.
-    if (isTokenExpired(session.accessToken)) {
+    // A stored user with no access token is not a session — it is leftover
+    // state (SecureStore and AsyncStorage are cleared separately, and a stale
+    // write could land after the token was already gone). Restoring it would
+    // sign the user in with no credentials, so treat it as logged out and
+    // scrub storage. Same for an already-expired token — bounce to Login.
+    if (!session.accessToken || isTokenExpired(session.accessToken)) {
       await clearSession();
       return { accessToken: null, refreshToken: null, user: null };
     }
@@ -61,6 +65,16 @@ export const setCredentials = createAsyncThunk(
     };
     await saveSession(next);
     return next;
+  },
+  {
+    // Refuse user-only patches when there is no token to attach them to.
+    // Login always passes `access_token`; the profile-sync path passes only
+    // `user`, and if that races a logout it must not re-create a session
+    // (which is what put the app back on the Dashboard after signing out).
+    condition: (creds, { getState }) => {
+      const prev = (getState() as { auth: AuthState }).auth;
+      return Boolean(creds.access_token ?? prev.accessToken);
+    },
   },
 );
 

@@ -7,6 +7,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+
+import { useTheme } from "../theme/ThemeProvider";
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /**
@@ -21,6 +24,7 @@ export function MenuButton({
   onPress: () => void;
   accessibilityLabel?: string;
 }) {
+  const { brand, primary } = useTheme();
   const press = useSharedValue(0);
 
   const style = useAnimatedStyle(() => ({
@@ -47,17 +51,15 @@ export function MenuButton({
           width: 44,
           height: 44,
           borderRadius: 14,
-          shadowColor: "#1f6b1f",
-          shadowOpacity: 0.08,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 2,
+          borderWidth: 1,
+          borderColor: primary.border,
+
         },
         style,
       ]}
-      className="items-center justify-center border border-brand-100 bg-white"
+      className="items-center justify-center bg-white"
     >
-      <List size={21} strokeWidth={2.2} color="#2f8f2c" />
+      <List size={21} strokeWidth={2.2} color={brand[600]} />
     </AnimatedPressable>
   );
 }

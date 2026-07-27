@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Image, Text, View } from "react-native";
 
 import type { AuthUser } from "../store/tokenStorage";
+import { useTheme } from "../theme/ThemeProvider";
 import { resolvePhotoUri } from "../utils/photo";
+
+/** Users already reported on — keeps the dev warning to one line each. */
+const warnedFor = new Set<string>();
 
 /** "Nitesh Kumar" → "NK"; falls back to the email's first letter. */
 export function initialsOf(user?: AuthUser | null): string {
@@ -35,6 +39,7 @@ export function Avatar({
   size?: number;
   ring?: boolean;
 }) {
+  const { brand } = useTheme();
   const [failed, setFailed] = useState(false);
   const uri = useMemo(() => resolvePhotoUri(user), [user]);
 
@@ -44,19 +49,34 @@ export function Avatar({
     setFailed(false);
   }, [uri]);
 
-  if (__DEV__ && user && !uri) {
+  // Dev diagnostic, once per user — the old version logged on every render and
+  // buried the Metro console. Prints the values (not the key list): the
+  // normalizer always writes both photo keys, so their presence proves nothing.
+  useEffect(() => {
+    if (!__DEV__ || !user || uri) return;
+    if (warnedFor.has(user._id)) return;
+    warnedFor.add(user._id);
     console.log(
-      '[Avatar] no photo field found on user. Keys:',
-      Object.keys(user as object).join(', '),
+      "[Avatar] no photo for",
+      user.email,
+      "— profile_image:",
+      JSON.stringify(user.profile_image),
+      "profile_photo:",
+      JSON.stringify(user.profile_photo),
     );
-  }
+  }, [user, uri]);
 
   const showPhoto = Boolean(uri) && !failed;
 
   return (
     <View
-      style={{ width: size, height: size, borderRadius: size / 2 }}
-      className={`items-center justify-center overflow-hidden bg-brand-600 ${
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: brand[600],
+      }}
+      className={`items-center justify-center overflow-hidden ${
         ring ? "border-2 border-white/70" : ""
       }`}
     >
@@ -66,7 +86,7 @@ export function Avatar({
           style={{ width: size, height: size }}
           onError={(e) => {
             if (__DEV__) {
-              console.log('[Avatar] image failed:', uri, e.nativeEvent);
+              console.log("[Avatar] image failed:", uri, e.nativeEvent);
             }
             setFailed(true);
           }}

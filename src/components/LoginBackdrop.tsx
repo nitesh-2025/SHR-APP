@@ -9,6 +9,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useTheme } from '../theme/ThemeProvider';
+
 // Built from plain Views + expo-linear-gradient rather than SVG, so no extra
 // native module is needed — a JS reload is enough to see changes.
 //
@@ -148,6 +150,7 @@ function Bubble({
  * through to the form underneath.
  */
 export function LoginBackdrop() {
+  const { brand } = useTheme();
   const { width, height } = useWindowDimensions();
   const fieldHeight = Math.min(height * 0.4, 340);
 
@@ -160,8 +163,10 @@ export function LoginBackdrop() {
 
   return (
     <View
-      pointerEvents="none"
       style={{
+        // In style, not as a prop — the `pointerEvents` prop is deprecated in
+        // RN 0.76+ and warns on every render.
+        pointerEvents: 'none',
         position: 'absolute',
         left: 0,
         right: 0,
@@ -188,9 +193,9 @@ export function LoginBackdrop() {
         />
       </Animated.View>
 
-      <Bubble size={14} left={width * 0.16} bottom={fieldHeight * 0.62} color="#5dcb57" delay={500} />
-      <Bubble size={8} left={width * 0.78} bottom={fieldHeight * 0.7} color="#39a935" delay={620} />
-      <Bubble size={20} left={width * 0.86} bottom={fieldHeight * 0.5} color="#bce2b7" delay={560} />
+      <Bubble size={14} left={width * 0.16} bottom={fieldHeight * 0.62} color={brand[400]} delay={500} />
+      <Bubble size={8} left={width * 0.78} bottom={fieldHeight * 0.7} color={brand[500]} delay={620} />
+      <Bubble size={20} left={width * 0.86} bottom={fieldHeight * 0.5} color={brand[200]} delay={560} />
 
       {/* Back → front: palest and tallest first, most saturated last. Opposite
           `shift` and `rotate` values keep the crests from stacking into one
@@ -200,7 +205,7 @@ export function LoginBackdrop() {
         shift={-0.2}
         bottom={-24}
         height={132}
-        colors={['#d6efd3', '#bce2b7']}
+        colors={[brand[100], brand[200]]}
         rotate={-3}
         delay={0}
         travel={95}
@@ -210,7 +215,7 @@ export function LoginBackdrop() {
         shift={0.24}
         bottom={-44}
         height={116}
-        colors={['#8ddc88', '#5dcb57']}
+        colors={[brand[300], brand[400]]}
         rotate={2.5}
         delay={120}
         travel={85}
@@ -220,7 +225,7 @@ export function LoginBackdrop() {
         shift={-0.06}
         bottom={-66}
         height={104}
-        colors={['#39a935', '#1f6b1f']}
+        colors={[brand[500], brand[700]]}
         rotate={-1.5}
         delay={240}
         travel={75}

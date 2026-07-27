@@ -1,6 +1,8 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { API_BASE_URL, APP_SOURCE } from "../config/env";
 import type { RootState } from "./index";
+import { normalizeAuthUser } from "./normalizeUser";
+import type { AuthUser } from "./tokenStorage";
 
 /**
  * Users (RBAC accounts) — separate from the Employee HR record.
@@ -118,8 +120,17 @@ export const usersApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ["User"],
+  tagTypes: ["User", "Me"],
   endpoints: (b) => ({
+    // The signed-in user, straight from the token — GET /api/users/me.
+    // Returns the populated document (role + department as objects), so it is
+    // normalised here and every consumer gets the flat `AuthUser`.
+    getMe: b.query<AuthUser | null, void>({
+      query: () => ({ url: "/me" }),
+      transformResponse: (r: Envelope<unknown>) => normalizeAuthUser(r.data),
+      providesTags: ["Me"],
+    }),
+
     getUsers: b.query<PortalUser[], UserListArgs | void>({
       query: (params) => ({ url: "/", params: (params || {}) as Record<string, unknown> }),
       transformResponse: (r: Envelope<PortalUser[]>) => r.data || [],
@@ -185,6 +196,7 @@ export const usersApi = createApi({
 });
 
 export const {
+  useGetMeQuery,
   useGetUsersQuery,
   useGetUsersPageQuery,
   useGetUserStatsQuery,

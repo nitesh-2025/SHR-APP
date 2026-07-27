@@ -23,32 +23,12 @@ import { ticketsApi } from './ticketsApi';
 import { usersApi } from './usersApi';
 import { workCalendarApi } from './workCalendarApi';
 
+import { apis } from './apis';
+import { authExpiryMiddleware } from './authExpiryMiddleware';
 import authReducer from './authSlice';
+import { logoutResetMiddleware } from './logoutResetMiddleware';
 import presenceReducer from './presenceSlice';
 import uiReducer from './uiSlice';
-
-const apis = [
-  api,
-  authApi,
-  attendanceApi,
-  leaveApi,
-  employeesApi,
-  departmentsApi,
-  chatApi,
-  notificationApi,
-  ticketsApi,
-  rolesApi,
-  usersApi,
-  activityLogApi,
-  permissionsOverviewApi,
-  dashboardApi,
-  assetsApi,
-  assetRequestsApi,
-  workCalendarApi,
-  salaryDeductionApi,
-  performanceApi,
-  recruitmentApi,
-] as const;
 
 export const store = configureStore({
   reducer: {
@@ -91,7 +71,15 @@ export const store = configureStore({
           'meta.baseQueryMeta',
         ],
       },
-    }).concat(...apis.map((a) => a.middleware)),
+      // `authExpiryMiddleware` sits before the API middlewares so it sees every
+      // rejected query/mutation from all of them. `logoutResetMiddleware` then
+      // wipes every cache on sign-out (see that file — it is what stops a
+      // late-resolving request from re-creating the session).
+    }).concat(
+      authExpiryMiddleware,
+      logoutResetMiddleware,
+      ...apis.map((a) => a.middleware),
+    ),
 });
 
 // Refetch-on-reconnect etc. RTK Query's default focus/online listeners are
@@ -108,6 +96,9 @@ export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
 // Auth selectors
 export const selectAuth = (s: RootState) => s.auth;
 export const selectCurrentUser = (s: RootState) => s.auth.user;
-export const selectIsAuthenticated = (s: RootState) =>
-  Boolean(s.auth.user || s.auth.accessToken);
+// The TOKEN is the session — a user object alone is not one. This used to be
+// `user || accessToken`, which meant any stray `setCredentials({ user })` after
+// a logout (e.g. a `/me` response landing late) flipped the app back to signed
+// in with no credentials at all.
+export const selectIsAuthenticated = (s: RootState) => Boolean(s.auth.accessToken);
 export const selectIsBootstrapped = (s: RootState) => s.auth.bootstrapped;

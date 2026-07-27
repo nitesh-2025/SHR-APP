@@ -7,37 +7,55 @@ module.exports = {
   // `colorScheme` from nativewind, so the utility names stay identical.
   theme: {
     extend: {
+      // ── Palette ───────────────────────────────────────────────────────────
+      // Three accents, one neutral ramp. Mirrored in `src/theme/colors.ts` for
+      // the props that need a raw string (SVG, Lucide, gradients) — NativeWind
+      // reads this file at build time and cannot import TS, so both must move
+      // together. Scale names are unchanged from the old green palette on
+      // purpose: every existing `bg-brand-*` class re-themes for free.
       colors: {
-        // Brand — the logo's green. Scale names are unchanged from the earlier
-        // palettes on purpose, so every existing `bg-brand-*` / `text-brand-*`
-        // class re-themes without touching a single call site.
+        // Primary — teal. Identity, CTAs, anything "working / good".
         brand: {
-          50: '#f1f9f0',
-          100: '#ddf0da',
-          200: '#bce2b7',
-          300: '#8ecd87',
-          400: '#5dcb57', // off-green highlight
-          500: '#39a935', // logo green
-          600: '#2f8f2c', // primary CTA
-          700: '#1f6b1f', // deep green
-          800: '#175019',
-          900: '#0f3512',
+          50: '#EFF7F5',
+          100: '#DFEFEB',
+          200: '#BFE0D7',
+          300: '#94CBBB',
+          400: '#64B39D',
+          500: '#389E81', // base
+          600: '#318B72', // primary CTA
+          700: '#29755F',
+          800: '#205C4B',
+          900: '#184236',
         },
-        // Accent — the logo's navy. One cool counterweight to the greens; used
-        // sparingly so the palette stays green-and-white, not multi-colour.
+        // Secondary — orange. Attention, paused states, warm actions.
         accent: {
-          50: '#eef1f6',
-          100: '#d3dae7',
-          200: '#a7b5cc',
-          300: '#7288a9',
-          400: '#455f89',
-          500: '#22314a', // logo navy
-          600: '#1b273b',
-          700: '#131c2a',
+          50: '#FDF4EF',
+          100: '#FAE7DC',
+          200: '#F6D0B9',
+          300: '#EFAD86',
+          400: '#E7884E',
+          500: '#E06216', // base
+          600: '#CA5814',
+          700: '#AA4A11',
+          800: '#863B0D',
+          900: '#652C0A',
         },
-        // App canvas — off-white with a green cast. Pure white next to the
-        // brand greens looks cold; this keeps the surface soft.
-        canvas: '#f2f6f0',
+        // Tertiary — violet. Completed / archived / the categorical third.
+        plum: {
+          50: '#F5F0F8',
+          100: '#EBE0F1',
+          200: '#D8C2E4',
+          300: '#B992CE',
+          400: '#975DB6',
+          500: '#73249D', // base
+          600: '#65208A',
+          700: '#551B74',
+          800: '#43155B',
+          900: '#300F42',
+        },
+        // App canvas (light mode). Dark mode surfaces come from `theme/colors`
+        // at runtime — a Tailwind class cannot switch scheme.
+        canvas: '#F8FAFC',
       },
       // Web keyframes/animations are intentionally NOT ported — RN has no CSS
       // animation engine. Motion belongs in Reanimated/Animated instead.

@@ -1,160 +1,160 @@
-import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AccountCard } from "../components/AccountCard";
 import { AppDrawer } from "../components/AppDrawer";
-import { Avatar, fullNameOf } from "../components/Avatar";
-import { MenuButton } from "../components/MenuButton";
+import { AttendanceCard } from "../components/AttendanceCard";
+import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
+import { LeaveBalanceCard } from "../components/LeaveBalanceCard";
+import { NotificationButton } from "../components/NotificationButton";
+import { NotificationSheet } from "../components/NotificationSheet";
+import { QuickActions } from "../components/QuickActions";
+import { SectionHeader } from "../components/ui";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import { selectCurrentUser, useAppSelector } from "../store";
-import { useGetDashboardQuery } from "../store/dashboardApi";
+import { useGetMyTodayQuery } from "../store/attendanceApi";
+import { useGetMyBalanceQuery } from "../store/leaveApi";
+import { space } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { MONTHS, WEEKDAYS_LONG } from "../utils/date";
 
-/** "Good Morning" / "Good Afternoon" / "Good Evening" for the header. */
-function greeting(): string {
+/** Greeting + the line under it. Time-of-day, not a random quote generator. */
+function greeting(): { hello: string; sub: string } {
   const h = new Date().getHours();
-  if (h < 12) return "Good Morning,";
-  if (h < 17) return "Good Afternoon,";
-  return "Good Evening,";
+  if (h < 12) return { hello: "Good Morning", sub: "Have a productive day ahead." };
+  if (h < 17) return { hello: "Good Afternoon", sub: "Hope the day is going well." };
+  return { hello: "Good Evening", sub: "Wrapping up for the day?" };
 }
 
 /**
- * First real screen off the ported data layer. Renders the live KPI cards from
- * `GET /dashboard` so the whole chain — SecureStore session → bearer header →
- * RTK Query → cache → UI — is provably wired. The remaining modules follow this
- * same shape.
+ * Home. Ordered by what an employee opens the app to do: see where they stand,
+ * punch in, jump to a module, check what leave is left.
  */
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const user = useAppSelector(selectCurrentUser);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const { data, isLoading, isFetching, error, refetch } =
-    useGetDashboardQuery();
+  const { c, brand } = useTheme();
 
-  const kpis = data?.kpis ?? [];
-  const [hero, ...rest] = kpis;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Only what this screen renders. The org-wide HR dashboard is deliberately
+  // NOT fetched here — it is admin reporting, not a daily action.
+  const today = useGetMyTodayQuery();
+  const balance = useGetMyBalanceQuery();
+
+  // Pull-to-refresh refreshes everything on screen, not just one card.
+  const refreshing =
+    (today.isFetching && !today.isLoading) || (balance.isFetching && !balance.isLoading);
+
+  const refreshAll = () => {
+    today.refetch();
+    balance.refetch();
+  };
+
+  // One place that maps a key to a destination, so the drawer, the bottom bar
+  // and the shortcut grid can never disagree about where a key goes.
+  const open = (key: string) => {
+    if (key === "attendance") navigation.navigate("Attendance");
+    else if (key === "leaves") navigation.navigate("Leave");
+    else if (key === "apply") navigation.navigate("LeaveApply");
+    else if (key === "more") setMenuOpen(true);
+  };
+
+  const now = new Date();
+  const dateLine = `${WEEKDAYS_LONG[now.getDay()]}, ${now.getDate()} ${
+    MONTHS[now.getMonth()]
+  } ${now.getFullYear()}`;
+  const { hello, sub } = greeting();
 
   return (
-    <View className="flex-1 bg-canvas">
+    <View style={{ backgroundColor: c.bg }} className="flex-1">
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 16 }}
         refreshControl={
           <RefreshControl
-            refreshing={isFetching && !isLoading}
-            onRefresh={refetch}
+            refreshing={refreshing}
+            onRefresh={refreshAll}
+            tintColor={brand[600]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ───────────────────────────────────────────────────── */}
-        <View style={{ paddingTop: insets.top + 12 }} className="px-5 pb-3">
-          <View className="flex-row items-center justify-between">
-            <Pressable
-              onPress={() => setMenuOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Open menu"
-              hitSlop={8}
-              className="flex-1 flex-row items-center gap-3 pr-3"
+        {/* ── Greeting ─────────────────────────────────────────────────── */}
+        <View
+          style={{
+            paddingTop: insets.top + space.md,
+            paddingHorizontal: space.screen,
+            paddingBottom: space.xl,
+          }}
+          className="flex-row items-start justify-between"
+        >
+          <View className="flex-1 pr-3">
+            <Text style={{ color: c.text }} className="font-display text-[28px] leading-9">
+              {hello} 👋
+            </Text>
+            <Text
+              style={{ color: c.textMuted }}
+              className="mt-1 font-ui-regular text-[14px]"
+              numberOfLines={1}
             >
-              <Avatar user={user} size={46} />
-              <View className="flex-1">
-                <Text className="text-xs text-slate-500">{greeting()}</Text>
-                <Text
-                  className="text-lg font-bold tracking-tight text-slate-900"
-                  numberOfLines={1}
-                >
-                  {fullNameOf(user)}
-                </Text>
-              </View>
-            </Pressable>
-
-            <MenuButton onPress={() => setMenuOpen(true)} />
+              {sub}
+            </Text>
+            <Text style={{ color: c.textFaint }} className="mt-1 font-ui text-[12px]">
+              {dateLine}
+            </Text>
           </View>
+
+          {/* Bell, not a hamburger: the drawer is one tap away on the profile
+              card and the "More" tab, but an unread badge has nowhere else to
+              live. */}
+          <NotificationButton onPress={() => setNotificationsOpen(true)} />
         </View>
 
-        {isLoading ? (
-          <View className="mt-24 items-center">
-            <ActivityIndicator color="#2f8f2c" />
-          </View>
-        ) : error ? (
-          <View className="mx-5 mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-            <Text className="text-sm font-semibold text-rose-800">
-              Failed to load dashboard
-            </Text>
-            <Text className="mt-1 text-xs text-rose-700">
-              Check that EXPO_PUBLIC_BASE_URL points at a reachable backend.
-            </Text>
-            <Pressable
-              onPress={refetch}
-              className="mt-2 self-start"
-              accessibilityRole="button"
-            >
-              <Text className="text-xs font-bold text-rose-900">RETRY</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            {/* ── Hero KPI, styled like the wallet card ──────────────────── */}
-            {hero ? (
-              <View className="mx-5 mt-2 overflow-hidden rounded-3xl shadow-lg">
-                <LinearGradient
-                  colors={["#1f6b1f", "#2f8f2c"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ padding: 20 }}
-                >
-                  <Text className="text-xs font-medium uppercase tracking-wide text-brand-200">
-                    {hero.label}
-                  </Text>
-                  <Text className="mt-3 text-4xl font-bold tracking-tight text-white">
-                    {hero.value}
-                  </Text>
-                  {hero.sub ? (
-                    <Text className="mt-1.5 text-xs text-brand-200">
-                      {hero.sub}
-                    </Text>
-                  ) : null}
-                </LinearGradient>
-              </View>
-            ) : null}
+        {/* ── Who's signed in ──────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: space.screen }}>
+          <AccountCard
+            user={user}
+            onDuty={today.data?.state === "clocked_in"}
+            onPress={() => setMenuOpen(true)}
+          />
+        </View>
 
-            {/* ── Remaining KPIs ────────────────────────────────────────── */}
-            <View className="mt-4 flex-row flex-wrap px-3.5">
-              {rest.map((k) => (
-                <View key={k.label} className="w-1/2 px-1.5 pb-3">
-                  <View className="rounded-2xl border border-slate-100 bg-white p-4">
-                    <Text
-                      className="text-xs font-medium text-slate-500"
-                      numberOfLines={1}
-                    >
-                      {k.label}
-                    </Text>
-                    <Text className="mt-1 text-2xl font-bold text-slate-900">
-                      {k.value}
-                    </Text>
-                    {k.sub ? (
-                      <Text
-                        className="mt-0.5 text-[11px] text-slate-400"
-                        numberOfLines={1}
-                      >
-                        {k.sub}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
+        {/* ── Today's attendance (the punch lives here) ─────────────────── */}
+        <View style={{ marginTop: space.lg }}>
+          <AttendanceCard onViewAll={() => navigation.navigate("Attendance")} />
+        </View>
+
+        {/* ── Shortcuts ────────────────────────────────────────────────── */}
+        <View style={{ marginTop: space.xxl }}>
+          <SectionHeader title="Quick Actions" onPress={() => setMenuOpen(true)} />
+          <QuickActions onOpen={open} onMore={() => setMenuOpen(true)} />
+        </View>
+
+        {/* ── Leave balance ────────────────────────────────────────────── */}
+        <View style={{ marginTop: space.lg }}>
+          <SectionHeader
+            title="Leave Balance"
+            onPress={() => navigation.navigate("Leave")}
+          />
+          <LeaveBalanceCard />
+        </View>
       </ScrollView>
 
-      <AppDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} />
+      <BottomNav active="home" onSelect={open} />
+
+      <NotificationSheet
+        visible={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+      />
+      <AppDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onNavigate={open}
+      />
     </View>
   );
 }

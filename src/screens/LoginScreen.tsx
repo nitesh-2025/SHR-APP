@@ -28,11 +28,14 @@ import { toast } from "../lib/toast";
 import { useAppDispatch } from "../store";
 import { useLoginMutation } from "../store/authApi";
 import { setCredentials } from "../store/authSlice";
+import { normalizeAuthUser } from "../store/normalizeUser";
 import {
   clearRememberedEmail,
   readRememberedEmail,
   saveRememberedEmail,
 } from "../store/tokenStorage";
+import { neutral } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 import {
   DEVICE_LABEL,
   detectDeviceType,
@@ -77,6 +80,7 @@ function describeLoginError(err: unknown): string {
 export default function LoginScreen() {
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
+  const { brand } = useTheme();
   const [login, { isLoading }] = useLoginMutation();
 
   const [email, setEmail] = useState("");
@@ -112,9 +116,14 @@ export default function LoginScreen() {
     try {
       const data = await login({ email: trimmed, password }).unwrap();
 
+      // The login payload carries the populated document (role / department as
+      // objects) exactly like /users/me — flatten it before it reaches state,
+      // otherwise `user.role` is an object and every RBAC check misses.
+      const user = normalizeAuthUser(data.user);
+
       // Device allow-list gate — block sign-in from a device class this user
       // isn't permitted to use. No token is stored, so they stay logged out.
-      if (!isDeviceAllowed(data.user?.allowed_devices)) {
+      if (!isDeviceAllowed(user?.allowed_devices)) {
         setError(
           `Is device (${DEVICE_LABEL[detectDeviceType()]}) se login allowed nahi hai. Apne admin se sampark karein.`,
         );
@@ -127,7 +136,7 @@ export default function LoginScreen() {
 
       await dispatch(
         setCredentials({
-          user: data.user,
+          user,
           access_token: data.access_token,
           refresh_token: data.refresh_token,
         }),
@@ -172,10 +181,10 @@ export default function LoginScreen() {
 
   // Focus is shown with a green border + tinted ring. Standard, and it survives
   // on any screen — unlike shadow-only affordances, which vanish in sunlight.
-  const fieldClass = (which: "email" | "password") =>
-    `h-14 flex-row items-center rounded-2xl border bg-white px-4 ${
-      focused === which ? "border-brand-500" : "border-slate-200"
-    }`;
+  const fieldClass = "h-14 flex-row items-center rounded-2xl border bg-white px-4";
+  const fieldBorder = (which: "email" | "password") => ({
+    borderColor: focused === which ? brand[500] : neutral[200],
+  });
 
   const openTerms = async () => {
     if (!TERMS_URL) {
@@ -231,8 +240,10 @@ export default function LoginScreen() {
           </Text>
 
           {error ? (
-            <View className="mt-5 flex-row rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3.5">
-              <View className="mr-3 mt-0.5 h-4 w-4 items-center justify-center rounded-full bg-rose-500">
+            // Errors use the orange accent, not a fourth red — the palette is
+            // three hues and this is still "attention", not a new category.
+            <View className="mt-5 flex-row rounded-2xl border border-accent-200 bg-accent-50 px-4 py-3.5">
+              <View className="mr-3 mt-0.5 h-4 w-4 items-center justify-center rounded-full bg-accent-500">
                 <Text
                   className="font-display text-[10px] leading-[13px] text-white"
                   allowFontScaling={false}
@@ -240,7 +251,7 @@ export default function LoginScreen() {
                   !
                 </Text>
               </View>
-              <Text className="flex-1 font-ui text-[13px] leading-5 text-rose-700">
+              <Text className="flex-1 font-ui text-[13px] leading-5 text-accent-700">
                 {error}
               </Text>
             </View>
@@ -250,14 +261,14 @@ export default function LoginScreen() {
           <Text className="mb-2 mt-7 font-ui-semibold text-[13px] text-slate-700">
             Email
           </Text>
-          <View className={fieldClass("email")}>
+          <View className={fieldClass} style={fieldBorder("email")}>
             <TextInput
               value={email}
               onChangeText={setEmail}
               onFocus={() => setFocused("email")}
               onBlur={() => setFocused(null)}
               placeholder="Enter your email"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={neutral[400]}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -270,14 +281,14 @@ export default function LoginScreen() {
           <Text className="mb-2 mt-5 font-ui-semibold text-[13px] text-slate-700">
             Password
           </Text>
-          <View className={fieldClass("password")}>
+          <View className={fieldClass} style={fieldBorder("password")}>
             <TextInput
               value={password}
               onChangeText={setPassword}
               onFocus={() => setFocused("password")}
               onBlur={() => setFocused(null)}
               placeholder="Enter your password"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={neutral[400]}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoComplete="current-password"
@@ -294,7 +305,10 @@ export default function LoginScreen() {
                 showPassword ? "Hide password" : "Show password"
               }
             >
-              <Text className="font-ui-semibold text-[12px] text-brand-600">
+              <Text
+                style={{ color: brand[600] }}
+                className="font-ui-semibold text-[12px]"
+              >
                 {showPassword ? "Hide" : "Show"}
               </Text>
             </Pressable>
@@ -312,11 +326,11 @@ export default function LoginScreen() {
             className="mt-5 flex-row items-center self-start py-1.5 pr-3"
           >
             <View
-              className={`h-[22px] w-[22px] items-center justify-center rounded-md border-2 ${
-                remember
-                  ? "border-brand-600 bg-brand-600"
-                  : "border-slate-300 bg-white"
-              }`}
+              style={{
+                backgroundColor: remember ? brand[600] : "#ffffff",
+                borderColor: remember ? brand[600] : neutral[300],
+              }}
+              className="h-[22px] w-[22px] items-center justify-center rounded-md border-2"
             >
               {remember ? (
                 <Text
@@ -339,15 +353,8 @@ export default function LoginScreen() {
             onLayout={(e) => setButtonWidth(e.nativeEvent.layout.width)}
             accessibilityRole="button"
             accessibilityState={{ disabled: isLoading, busy: isLoading }}
-            style={{
-              height: 54,
-              shadowColor: "#2f8f2c",
-              shadowOpacity: 0.25,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 4,
-            }}
-            className={`mt-7 flex-row items-center justify-center gap-2 rounded bg-brand-600 ${
+            style={{ height: 54, backgroundColor: brand[600] }}
+            className={`mt-7 flex-row items-center justify-center gap-2 rounded-2xl ${
               isLoading ? "opacity-60" : ""
             }`}
           >
@@ -355,8 +362,8 @@ export default function LoginScreen() {
                 on the Pressable so it can't clip the Android elevation shadow.
                 Not tappable, so it never steals the press. */}
             <View
-              pointerEvents="none"
-              className="absolute inset-0 overflow-hidden rounded"
+              style={{ pointerEvents: "none" }}
+              className="absolute inset-0 overflow-hidden rounded-2xl"
             >
               <Animated.View
                 style={[

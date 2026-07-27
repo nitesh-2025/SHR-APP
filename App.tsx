@@ -15,6 +15,7 @@ import { Provider } from "react-redux";
 import { Toaster } from "./src/components/Toaster";
 import RootNavigator from "./src/navigation/RootNavigator";
 import { store } from "./src/store";
+import { ThemeProvider } from "./src/theme/ThemeProvider";
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -27,15 +28,17 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <SafeAreaProvider>
-          <StatusBar style="dark" />
-          {fontsLoaded ? (
-            <>
-              <RootNavigator />
-              <Toaster />
-            </>
-          ) : null}
-        </SafeAreaProvider>
+        <ThemeProvider>
+          <SafeAreaProvider>
+            <StatusBar style="dark" />
+            {fontsLoaded ? (
+              <>
+                <RootNavigator />
+                <Toaster />
+              </>
+            ) : null}
+          </SafeAreaProvider>
+        </ThemeProvider>
       </Provider>
     </GestureHandlerRootView>
   );
