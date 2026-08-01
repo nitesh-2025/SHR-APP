@@ -88,7 +88,9 @@ export interface Scheme {
 }
 
 export const lightScheme: Scheme = {
-  bg: '#F8FAFC',
+  /** White smoke. Neutral, not slate-tinted — the cards on top are pure white,
+   *  and a blue-grey canvas made them read as slightly warm by comparison. */
+  bg: '#F5F5F5',
   card: '#FFFFFF',
   fill: '#F1F5F9',
   border: '#E2E8F0',
@@ -112,9 +114,11 @@ export const darkScheme: Scheme = {
 /* ── Geometry ────────────────────────────────────────────────────────────── */
 
 export const radius = {
-  card: 20,
-  button: 16,
-  input: 16,
+  /** Large surfaces. Generous on purpose — it is what reads as "premium". */
+  card: 24,
+  button: 18,
+  input: 18,
+  /** Small surfaces: icon wells, inner wells, chips-with-corners. */
   well: 16,
   pill: 999,
 } as const;
@@ -141,6 +145,17 @@ export const space = {
  */
 export const shadow = {
   none: {},
+  /**
+   * Barely-there lift. For cards that sit in a group — a row of shortcuts, a
+   * chart panel — where the full card shadow stacks into visible grey haze.
+   */
+  soft: {
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
+  },
   /** Default card. y8 / blur24 / 8%. */
   card: {
     shadowColor: '#0F172A',
@@ -152,10 +167,10 @@ export const shadow = {
   /** Floating elements — bottom bar, FAB. */
   floating: {
     shadowColor: '#0F172A',
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    shadowOpacity: 0.14,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
   /** Modal sheet rising over content. */
   sheet: {

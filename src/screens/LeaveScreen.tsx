@@ -19,6 +19,7 @@ import {
 } from '../store/leaveApi';
 import { radius, shadow, space, surface, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { T } from '../theme/type';
 import { fmtDate, fmtDayShort, MONTHS, parseYmd } from '../utils/date';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -203,10 +204,10 @@ export default function LeaveScreen() {
         </Pressable>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className="font-display text-[22px] leading-7">
+          <Text style={{ color: c.text }} className={T.screenTitle}>
             My Leave
           </Text>
-          <Text style={{ color: brand[600] }} className="font-ui text-[12.5px]">
+          <Text style={{ color: brand[600] }} className={T.secondary}>
             {year}
           </Text>
         </View>
@@ -402,6 +403,7 @@ export default function LeaveScreen() {
           if (key === 'home') navigation.navigate('Dashboard');
           else if (key === 'attendance') navigation.navigate('Attendance');
           else if (key === 'apply') navigation.navigate('LeaveApply');
+          else if (key === 'profile') navigation.navigate('Profile');
         }}
       />
     </View>

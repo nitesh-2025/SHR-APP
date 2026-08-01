@@ -1,102 +1,217 @@
 import {
+  BookText,
   Boxes,
   CalendarDays,
-  ClipboardList,
+  FileText,
+  LayoutGrid,
   LifeBuoy,
-  MoreHorizontal,
   Receipt,
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
-import { IconWell } from './ui';
+import { toast } from '../lib/toast';
 import { radius, shadow, space, surface, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { T } from '../theme/type';
+
+/**
+ * Cards visible at rest.
+ *
+ * Three, not four: at four the cards come out ~79px wide, which is narrower than
+ * the icon well is tall and reads as a strip of slivers. Three gives each card
+ * room to be a card, and the fourth peeking at the edge is what says the rail
+ * scrolls.
+ */
+const PER_SCREEN = 3;
+const GAP = space.md;
 
 interface Action {
   key: string;
   label: string;
+  /** Spoken, not shown — screen readers get what the tap will do. */
+  hint: string;
   icon: LucideIcon;
-  /** Omit to follow the selected accent. */
-  tone?: Surface;
+  tone: Surface;
+  /** No screen behind it yet. Still tappable, so the tap can say why. */
   soon?: boolean;
 }
 
-// Two rows of four. Live destinations lead so the grid doesn't open with
-// greyed-out tiles.
+/**
+ * Everything the bottom bar does NOT carry.
+ *
+ * Home, Attendance, Leaves and Profile each have a tab, and the centre button
+ * owns every punch — repeating any of those here would just be two doors into
+ * the same room. What is left is the long tail, and a scrolling rail is exactly
+ * the right shape for a long tail: new modules get appended without re-flowing
+ * the row or shrinking every card that already exists.
+ */
 const ACTIONS: Action[] = [
-  { key: 'attendance', label: 'Attendance', icon: CalendarDays },
-  { key: 'leaves', label: 'Leave', icon: ClipboardList, tone: surface.warning },
-  { key: 'calendar', label: 'Calendar', icon: CalendarDays, tone: surface.purple, soon: true },
-  { key: 'meeting', label: 'Meetings', icon: Users, tone: surface.info, soon: true },
-  { key: 'tickets', label: 'Tickets', icon: LifeBuoy, tone: surface.danger, soon: true },
-  { key: 'asset', label: 'Assets', icon: Boxes, soon: true },
-  { key: 'payslip', label: 'Payslip', icon: Receipt, tone: surface.warning, soon: true },
-  { key: 'more', label: 'More', icon: MoreHorizontal, tone: surface.neutral },
+  {
+    key: 'apply',
+    label: 'Apply Leave',
+    hint: 'New request',
+    icon: FileText,
+    tone: surface.danger,
+  },
+  {
+    key: 'payslip',
+    label: 'Payslip',
+    hint: 'View salary',
+    icon: Receipt,
+    tone: surface.purple,
+    soon: true,
+  },
+  {
+    key: 'tickets',
+    label: 'Tickets',
+    hint: 'Raise an issue',
+    icon: LifeBuoy,
+    tone: surface.info,
+    soon: true,
+  },
+  {
+    key: 'calendar',
+    label: 'Calendar',
+    hint: 'Holidays',
+    icon: CalendarDays,
+    tone: surface.success,
+    soon: true,
+  },
+  {
+    key: 'meeting',
+    label: 'Meetings',
+    hint: 'Your schedule',
+    icon: Users,
+    tone: surface.warning,
+    soon: true,
+  },
+  {
+    key: 'asset',
+    label: 'Assets',
+    hint: 'Request gear',
+    icon: Boxes,
+    tone: surface.purple,
+    soon: true,
+  },
+  {
+    key: 'policy',
+    label: 'HR Policy',
+    hint: 'Read the rules',
+    icon: BookText,
+    tone: surface.info,
+    soon: true,
+  },
+  {
+    key: 'more',
+    label: 'More',
+    hint: 'All options',
+    icon: LayoutGrid,
+    tone: surface.neutral,
+  },
 ];
 
-function Tile({ action, onPress }: { action: Action; onPress: () => void }) {
-  const { c, primary, dark } = useTheme();
+function ActionCard({
+  action,
+  width,
+  onPress,
+}: {
+  action: Action;
+  width: number;
+  onPress: () => void;
+}) {
+  const { c, dark } = useTheme();
   const Icon = action.icon;
-  const soon = Boolean(action.soon);
-  const tone = soon ? surface.muted : (action.tone ?? primary);
 
   return (
-    <View style={{ width: '25%', padding: space.xs + 2 }}>
-      <Pressable
-        onPress={soon ? undefined : onPress}
-        disabled={soon}
-        accessibilityRole="button"
-        accessibilityLabel={action.label}
-        accessibilityState={{ disabled: soon }}
-        accessibilityHint={soon ? 'Coming soon' : undefined}
-        style={({ pressed }) => ({
-          opacity: pressed ? 0.7 : soon ? 0.55 : 1,
-          backgroundColor: c.card,
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${action.label}. ${action.hint}`}
+      accessibilityHint={action.soon ? 'Coming soon' : undefined}
+      style={({ pressed }) => ({
+        width,
+        backgroundColor: c.card,
+        borderRadius: radius.card - 4,
+        // The hairline does the separating in both schemes; the shadow is only
+        // there to lift the card off the canvas, not to draw its edge.
+        borderWidth: 1,
+        borderColor: c.border,
+        paddingHorizontal: space.sm,
+        paddingVertical: space.lg,
+        opacity: pressed ? 0.85 : 1,
+        transform: [{ scale: pressed ? 0.97 : 1 }],
+        ...(dark ? shadow.none : shadow.soft),
+      })}
+      className="items-center"
+    >
+      {/* Solid fill, white glyph. A pale tint behind a coloured outline icon
+          washes out at this size — the well is the only saturated thing on the
+          card, so it has to carry the category on its own. */}
+      <View
+        style={{
+          backgroundColor: action.tone.tint,
           borderRadius: radius.well,
-          borderWidth: dark ? 1 : 0,
-          borderColor: c.border,
-          paddingVertical: space.md,
-          ...(dark ? shadow.none : shadow.card),
-        })}
-        className="items-center gap-1.5"
+        }}
+        className="h-14 w-14 items-center justify-center"
       >
-        <IconWell tone={tone} size={38}>
-          <Icon size={18} strokeWidth={2} color={tone.tint} />
-        </IconWell>
-        <Text
-          style={{ color: soon ? c.textFaint : c.text }}
-          className="font-ui text-[11px]"
-          numberOfLines={1}
-        >
-          {action.label}
-        </Text>
-      </Pressable>
-    </View>
+        <Icon size={26} strokeWidth={2.2} color="#FFFFFF" />
+      </View>
+
+      <Text
+        style={{ color: c.text }}
+        className={`mt-3 text-center ${T.cardTitleSm}`}
+        numberOfLines={1}
+      >
+        {action.label}
+      </Text>
+    </Pressable>
   );
 }
 
-/** Four-column shortcut grid. */
+/** Horizontally scrolling rail of shortcut cards. */
 export function QuickActions({
   onOpen,
   onMore,
 }: {
   onOpen?: (key: string) => void;
+  /** Kept for the caller that still routes a "more" tap here. */
   onMore?: () => void;
 }) {
+  const { width } = useWindowDimensions();
+
+  // Sized so exactly PER_SCREEN cards fill the viewport — a hardcoded width
+  // left the last card sliced by the screen edge, which reads as broken rather
+  // than as "there is more".
+  const cardWidth =
+    (width - space.screen * 2 - GAP * (PER_SCREEN - 1)) / PER_SCREEN;
+
   return (
-    <View
-      className="flex-row flex-wrap"
-      style={{ paddingHorizontal: space.screen - (space.xs + 2) }}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingHorizontal: space.screen,
+        gap: GAP,
+      }}
     >
       {ACTIONS.map((a) => (
-        <Tile
+        <ActionCard
           key={a.key}
           action={a}
-          onPress={() => (a.key === 'more' ? onMore?.() : onOpen?.(a.key))}
+          width={cardWidth}
+          onPress={() => {
+            if (a.soon) {
+              // A dead tap reads as a bug. Say why nothing happened.
+              toast.info(`${a.label} is coming soon.`);
+              return;
+            }
+            if (a.key === 'more') onMore?.();
+            else onOpen?.(a.key);
+          }}
         />
       ))}
-    </View>
+    </ScrollView>
   );
 }

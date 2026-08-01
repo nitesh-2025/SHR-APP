@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radius, space } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { T } from '../theme/type';
 
 /**
  * Title bar for every pushed screen. The native header is disabled on the stack
@@ -53,17 +54,13 @@ export function ScreenHeader({
       ) : null}
 
       <View className="flex-1">
-        <Text
-          style={{ color: c.text }}
-          className="font-display text-[22px] leading-7"
-          numberOfLines={1}
-        >
+        <Text style={{ color: c.text }} className={T.screenTitle} numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
           <Text
             style={{ color: c.textMuted }}
-            className="font-ui-regular text-[12.5px]"
+            className={T.secondary}
             numberOfLines={1}
           >
             {subtitle}

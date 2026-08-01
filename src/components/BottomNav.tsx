@@ -1,12 +1,12 @@
 import {
-  CalendarDays,
-  ClipboardList,
-  Home,
-  LifeBuoy,
-  Menu,
-
+  CalendarCheck,
+  House,
+  Plus,
+  TreePalm,
+  UserRound,
   type LucideIcon,
 } from "lucide-react-native";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -15,29 +15,50 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { radius, shadow } from "../theme/colors";
+import { PunchSheet } from "./PunchSheet";
+import { neutral, radius, shadow } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
 
-export type NavKey = "home" | "attendance" | "leaves" | "tickets" | "more";
+export type NavKey = "home" | "attendance" | "leaves" | "profile";
 
 interface Tab {
   key: NavKey;
   label: string;
   icon: LucideIcon;
-  /** Screen not built yet — rendered muted and inert. */
-  soon?: boolean;
 }
 
-const TABS: Tab[] = [
-  { key: "home", label: "Home", icon: Home },
-  { key: "attendance", label: "Attendance", icon: CalendarDays },
-  { key: "leaves", label: "Leave", icon: ClipboardList },
-  { key: "tickets", label: "Tickets", icon: LifeBuoy, soon: true },
-  { key: "more", label: "More", icon: Menu },
+/**
+ * Two either side of the centre button.
+ *
+ * Icons are chosen for what they MEAN, not for the module's name: a calendar
+ * with a tick is days you showed up, a palm tree is days you did not. Two plain
+ * calendars side by side would have been the same silhouette twice.
+ */
+const LEFT: Tab[] = [
+  { key: "home", label: "Home", icon: House },
+  { key: "attendance", label: "Attendance", icon: CalendarCheck },
+];
+
+const RIGHT: Tab[] = [
+  { key: "leaves", label: "Leaves", icon: TreePalm },
+  { key: "profile", label: "Profile", icon: UserRound },
 ];
 
 /** Bar height, excluding the home-indicator inset. */
-export const BOTTOM_NAV_HEIGHT = 64;
+export const BOTTOM_NAV_HEIGHT = 66;
+
+/** Diameter of the centre punch button. */
+const FAB_SIZE = 58;
+
+/**
+ * How far the button breaks the bar's top edge.
+ *
+ * Small on purpose. A FAB hoisted half its height above the bar floats away
+ * from it and starts looking like a dropped sticker; sitting mostly INSIDE the
+ * bar, just cresting the edge, is what reads as part of the same object.
+ */
+const FAB_LIFT = 9;
 
 /** Total space a screen must leave clear at the bottom. */
 export const BOTTOM_NAV_CLEARANCE = BOTTOM_NAV_HEIGHT + 12;
@@ -52,32 +73,43 @@ function Item({
   onPress: () => void;
 }) {
   const Icon = tab.icon;
-  const { brand, c, primary } = useTheme();
+  const { brand, primary, dark, c } = useTheme();
 
-  // The pill grows in behind the icon on selection — a colour swap alone is
-  // easy to miss on a five-tab bar.
+  // A little bounce on the way in — a tab change should be felt, and a
+  // critically damped spring here reads as a fade rather than a switch.
   const grow = useSharedValue(active ? 1 : 0);
-  grow.value = withSpring(active ? 1 : 0, { damping: 16, stiffness: 220, mass: 0.5 });
+  grow.value = withSpring(active ? 1 : 0, {
+    damping: 12,
+    stiffness: 260,
+    mass: 0.6,
+  });
 
-  const pillStyle = useAnimatedStyle(() => ({
-    opacity: grow.value,
-    transform: [{ scale: 0.7 + grow.value * 0.3 }],
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -grow.value * 3 },
+      { scale: 1 + grow.value * 0.1 },
+    ],
   }));
 
-  const color = tab.soon ? c.textFaint : active ? brand[600] : c.textMuted;
+  // The tinted disc grows in behind the glyph. It is what carries the change
+  // visually — colour alone, at 22px, is easy to miss on a four-tab bar.
+  const discStyle = useAnimatedStyle(() => ({
+    opacity: grow.value,
+    transform: [{ scale: 0.6 + grow.value * 0.4 }],
+  }));
+
+  const color = active ? brand[600] : dark ? c.textMuted : neutral[400];
 
   return (
     <Pressable
-      onPress={tab.soon ? undefined : onPress}
-      disabled={tab.soon}
+      onPress={onPress}
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
-      accessibilityState={{ selected: active, disabled: Boolean(tab.soon) }}
-      accessibilityHint={tab.soon ? "Coming soon" : undefined}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : tab.soon ? 0.5 : 1 })}
+      accessibilityState={{ selected: active }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       className="flex-1 items-center justify-center gap-1"
     >
-      <View className="h-8 w-14 items-center justify-center">
+      <View className="h-8 w-12 items-center justify-center">
         <Animated.View
           style={[
             {
@@ -86,14 +118,26 @@ function Item({
               backgroundColor: primary.bg,
               borderRadius: radius.pill,
             },
-            pillStyle,
+            discStyle,
           ]}
         />
-        <Icon size={22} strokeWidth={2} color={color} />
+
+        <Animated.View style={iconStyle}>
+          {/* Filled with the PALE tint, stroked with the accent — Lucide has no
+              filled variants, and filling with the stroke colour would flatten
+              the tick out of the calendar and the door out of the house. */}
+          <Icon
+            size={22}
+            strokeWidth={active ? 2.2 : 1.8}
+            color={color}
+            fill={active ? primary.bg : "none"}
+          />
+        </Animated.View>
       </View>
+
       <Text
         style={{ color }}
-        className={`text-[11px] ${active ? "font-ui-semibold" : "font-ui-regular"}`}
+        className={active ? T.navActive : T.navInactive}
         allowFontScaling={false}
         numberOfLines={1}
       >
@@ -104,10 +148,15 @@ function Item({
 }
 
 /**
- * Floating bottom bar. Presentational on purpose — it reports taps upward
- * instead of pretending to be a tab navigator over screens that do not all
- * exist yet; swapping it for `createBottomTabNavigator` later is a drop-in
- * change at the call site.
+ * Floating bottom bar with a centre punch button.
+ *
+ * The punch actions used to live on the attendance card, which meant they only
+ * existed on the home screen — an employee on the Leave tab had to navigate
+ * back just to clock out. As the centre button they are one tap from anywhere,
+ * and the sheet behind it is owned here, so no screen has to wire it up.
+ *
+ * The tabs stay presentational: they report taps upward instead of pretending
+ * to be a tab navigator over screens that do not all exist yet.
  */
 export function BottomNav({
   active = "home",
@@ -117,24 +166,94 @@ export function BottomNav({
   onSelect: (key: NavKey | "apply") => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { c } = useTheme();
+  const { c, brand, dark } = useTheme();
+  const [punchOpen, setPunchOpen] = useState(false);
+
+  const press = useSharedValue(0);
+  const fabStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - press.value * 0.08 }],
+  }));
+  const to = (v: number) => withSpring(v, { damping: 18, stiffness: 320 });
 
   return (
-    <View
-      className="absolute inset-x-0 bottom-0"
-      style={{
-        paddingBottom: insets.bottom,
-        backgroundColor: c.card,
-        borderTopWidth: 1,
-        borderTopColor: c.border,
-        ...shadow.floating,
-      }}
-    >
-      <View style={{ height: BOTTOM_NAV_HEIGHT }} className="flex-row items-center">
-        {TABS.map((t) => (
-          <Item key={t.key} tab={t} active={t.key === active} onPress={() => onSelect(t.key)} />
-        ))}
+    <>
+      <View
+        className="absolute inset-x-0 bottom-0"
+        style={{
+          paddingBottom: insets.bottom,
+          backgroundColor: c.card,
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          // No top border in light mode — the shadow already separates the bar
+          // from the canvas, and a hairline under a 28px curve reads as a seam.
+          borderTopWidth: dark ? 1 : 0,
+          borderTopColor: c.border,
+          ...shadow.floating,
+        }}
+      >
+        <View
+          style={{ height: BOTTOM_NAV_HEIGHT }}
+          className="flex-row items-center"
+        >
+          {LEFT.map((t) => (
+            <Item
+              key={t.key}
+              tab={t}
+              active={t.key === active}
+              onPress={() => onSelect(t.key)}
+            />
+          ))}
+
+          {/* Reserves the slot the button straddles, so the four tabs stay
+              evenly spaced instead of crowding under it. */}
+          <View style={{ width: FAB_SIZE + 14 }} />
+
+          {RIGHT.map((t) => (
+            <Item
+              key={t.key}
+              tab={t}
+              active={t.key === active}
+              onPress={() => onSelect(t.key)}
+            />
+          ))}
+        </View>
+
+        {/* ── Punch button ─────────────────────────────────────────────── */}
+        <Animated.View
+          style={[
+            { position: "absolute", alignSelf: "center", top: -FAB_LIFT },
+            fabStyle,
+          ]}
+        >
+          <Pressable
+            onPress={() => setPunchOpen(true)}
+            onPressIn={() => {
+              press.value = to(1);
+            }}
+            onPressOut={() => {
+              press.value = to(0);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Attendance actions"
+            style={{
+              width: FAB_SIZE,
+              height: FAB_SIZE,
+              borderRadius: FAB_SIZE / 2,
+              backgroundColor: brand[600],
+              // Ring in the BAR's colour, so the circle reads as punched
+              // through the bar rather than stuck on top of it.
+              borderWidth: 5,
+              borderColor: c.card,
+              ...shadow.card,
+            }}
+            className="items-center justify-center"
+          >
+            <Plus size={26} strokeWidth={2.6} color="#FFFFFF" />
+          </Pressable>
+        </Animated.View>
       </View>
-    </View>
+
+      <PunchSheet visible={punchOpen} onClose={() => setPunchOpen(false)} />
+    </>
   );
 }

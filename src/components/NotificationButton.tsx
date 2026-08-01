@@ -28,7 +28,7 @@ export function NotificationButton({
   /** Sitting on a dark/gradient header — inverts the button's own colours. */
   onDark?: boolean;
 }) {
-  const { brand, primary } = useTheme();
+  const { c } = useTheme();
   const { data: unread = 0 } = useGetUnreadCountQuery(undefined, {
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -64,21 +64,23 @@ export function NotificationButton({
           width: 44,
           height: 44,
           borderRadius: 14,
-          borderWidth: 1,
-          backgroundColor: onDark ? 'rgba(255,255,255,0.16)' : '#ffffff',
-          borderColor: onDark ? 'rgba(255,255,255,0.24)' : primary.border,
-          
+          // No fill, no border. A boxed bell next to a round avatar read as two
+          // unrelated controls; bare, the glyph sits on the canvas and the
+          // avatar is the only object in the corner.
+          backgroundColor: 'transparent',
         },
         style,
       ]}
       className="items-center justify-center"
     >
-      <Bell size={20} strokeWidth={2.2} color={onDark ? '#ffffff' : brand[600]} />
+      <Bell size={22} strokeWidth={2} color={onDark ? '#ffffff' : c.text} />
 
       {unread > 0 ? (
+        // The ring is the CANVAS colour, not white — on a white-smoke page a
+        // white ring is a visible halo around the badge.
         <View
-          className="absolute right-1 top-1 min-w-[18px] items-center justify-center rounded-full border-2 border-white px-1"
-          style={{ height: 18, backgroundColor: danger[500] }}
+          className="absolute right-0.5 top-1 min-w-[18px] items-center justify-center rounded-full border-2 px-1"
+          style={{ height: 18, backgroundColor: danger[500], borderColor: c.bg }}
         >
           <Text
             className="font-ui-semibold text-[9px] text-white"

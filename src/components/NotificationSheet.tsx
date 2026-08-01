@@ -188,6 +188,10 @@ export function NotificationSheet({
         </View>
       ) : (
         <FlatList
+          // `shrink` so the list gives way to the sheet's `maxHeight` and
+          // scrolls inside it, rather than measuring to its own content height
+          // and being clipped by the cap.
+          className="shrink"
           data={items}
           keyExtractor={(n) => n._id}
           refreshing={isFetching && !isLoading}

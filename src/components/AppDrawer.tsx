@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
 import {
   Boxes,
   CalendarDays,
@@ -14,15 +14,15 @@ import {
   Users,
   X,
   type LucideIcon,
-} from 'lucide-react-native';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+} from "lucide-react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { Avatar, fullNameOf } from './Avatar';
-import { BottomSheet } from './BottomSheet';
-import { selectCurrentUser, useAppDispatch, useAppSelector } from '../store';
-import { clearCredentials } from '../store/authSlice';
-import { danger, radius, space } from '../theme/colors';
-import { useTheme, type ThemeMode } from '../theme/ThemeProvider';
+import { Avatar, fullNameOf } from "./Avatar";
+import { BottomSheet } from "./BottomSheet";
+import { selectCurrentUser, useAppDispatch, useAppSelector } from "../store";
+import { clearCredentials } from "../store/authSlice";
+import { danger, radius, space } from "../theme/colors";
+import { useTheme, type ThemeMode } from "../theme/ThemeProvider";
 
 interface MenuEntry {
   key: string;
@@ -34,14 +34,14 @@ interface MenuEntry {
 
 // Order follows how often an employee reaches for each one, not alphabetical.
 const MENU: MenuEntry[] = [
-  { key: 'leaves', label: 'My Leaves', icon: ClipboardList },
-  { key: 'attendance', label: 'Attendance', icon: CalendarDays },
-  { key: 'meeting', label: 'Meeting', icon: Users, soon: true },
-  { key: 'calendar', label: 'Calendar', icon: CalendarDays, soon: true },
-  { key: 'tickets', label: 'Tickets', icon: LifeBuoy, soon: true },
-  { key: 'refer', label: 'Refer & Earn', icon: Gift, soon: true },
-  { key: 'policy', label: 'HR Policy', icon: FileText, soon: true },
-  { key: 'asset', label: 'Asset Request', icon: Boxes, soon: true },
+  { key: "leaves", label: "My Leaves", icon: ClipboardList },
+  { key: "attendance", label: "Attendance", icon: CalendarDays },
+  { key: "meeting", label: "Meeting", icon: Users, soon: true },
+  { key: "calendar", label: "Calendar", icon: CalendarDays, soon: true },
+  { key: "tickets", label: "Tickets", icon: LifeBuoy, soon: true },
+  { key: "refer", label: "Refer & Earn", icon: Gift, soon: true },
+  { key: "policy", label: "HR Policy", icon: FileText, soon: true },
+  { key: "asset", label: "Asset Request", icon: Boxes, soon: true },
 ];
 
 /**
@@ -60,7 +60,7 @@ function Row({ entry, onPress }: { entry: MenuEntry; onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel={entry.label}
       accessibilityState={{ disabled: soon }}
-      accessibilityHint={soon ? 'Coming soon' : undefined}
+      accessibilityHint={soon ? "Coming soon" : undefined}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       className="h-12 flex-row items-center gap-3.5"
     >
@@ -74,7 +74,10 @@ function Row({ entry, onPress }: { entry: MenuEntry; onPress: () => void }) {
       </Text>
 
       {soon ? (
-        <Text style={{ color: c.textFaint }} className="font-ui-regular text-[11.5px]">
+        <Text
+          style={{ color: c.textFaint }}
+          className="font-ui-regular text-[11.5px]"
+        >
           Soon
         </Text>
       ) : (
@@ -86,7 +89,13 @@ function Row({ entry, onPress }: { entry: MenuEntry; onPress: () => void }) {
 
 /* ── Settings rows ────────────────────────────────────────────────────────── */
 
-function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+function SettingRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   const { c } = useTheme();
   return (
     <View className="h-12 flex-row items-center justify-between">
@@ -108,9 +117,9 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
 function ModePicker() {
   const { mode, setMode, c, brand } = useTheme();
   const OPTIONS: { key: ThemeMode; label: string; icon: LucideIcon }[] = [
-    { key: 'light', label: 'Light', icon: Sun },
-    { key: 'dark', label: 'Dark', icon: Moon },
-    { key: 'system', label: 'Auto', icon: SunMoon },
+    { key: "light", label: "Light", icon: Sun },
+    { key: "dark", label: "Dark", icon: Moon },
+    { key: "system", label: "Auto", icon: SunMoon },
   ];
 
   return (
@@ -129,13 +138,11 @@ function ModePicker() {
               accessibilityLabel={`${label} appearance`}
               accessibilityState={{ selected: active }}
               style={({ pressed }) => ({
-                // Selected pill is the CARD colour, not the accent: three
-                // coloured segments in a row read as a warning strip.
-                backgroundColor: active ? c.card : 'transparent',
+                backgroundColor: active ? c.card : "transparent",
                 borderRadius: radius.pill,
                 opacity: pressed ? 0.7 : 1,
               })}
-              className="flex-row items-center gap-1 px-2.5 py-1.5"
+              className="flex-row items-center gap-4 px-2.5 py-1.5"
             >
               <Icon
                 size={13}
@@ -175,7 +182,8 @@ export function AppDrawer({
   const user = useAppSelector(selectCurrentUser);
   const { c } = useTheme();
 
-  const version = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? '1.0.0';
+  const version =
+    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.0.0";
 
   const handleLogout = () => {
     // Close first: the navigator unmounts this tree as soon as the session
@@ -217,7 +225,8 @@ export function AppDrawer({
             className="font-ui-regular text-[12.5px]"
             numberOfLines={1}
           >
-            {[designation, user?.department_name].filter(Boolean).join(' · ') || user?.email}
+            {[designation, user?.department_name].filter(Boolean).join(" · ") ||
+              user?.email}
           </Text>
         </View>
         <Pressable
@@ -225,7 +234,10 @@ export function AppDrawer({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Close menu"
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, backgroundColor: c.fill })}
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.6 : 1,
+            backgroundColor: c.fill,
+          })}
           className="h-8 w-8 items-center justify-center rounded-full"
         >
           <X size={16} strokeWidth={2} color={c.textMuted} />
@@ -239,7 +251,10 @@ export function AppDrawer({
         // `shrink`: inside a height-capped column the list must give way to the
         // footer instead of pushing it off the sheet.
         className="shrink"
-        contentContainerStyle={{ paddingHorizontal: space.screen, paddingVertical: space.sm }}
+        contentContainerStyle={{
+          paddingHorizontal: space.screen,
+          paddingVertical: space.sm,
+        }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
@@ -267,7 +282,10 @@ export function AppDrawer({
           className="h-12 flex-row items-center justify-center gap-2"
         >
           <LogOut size={17} strokeWidth={2} color={danger[500]} />
-          <Text style={{ color: danger[600] }} className="font-ui-semibold text-[14px]">
+          <Text
+            style={{ color: danger[600] }}
+            className="font-ui-semibold text-[14px]"
+          >
             Log out
           </Text>
         </Pressable>

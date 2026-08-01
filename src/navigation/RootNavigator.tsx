@@ -8,6 +8,7 @@ import DashboardScreen from "../screens/DashboardScreen";
 import LeaveApplyScreen from "../screens/LeaveApplyScreen";
 import LeaveScreen from "../screens/LeaveScreen";
 import LoginScreen from "../screens/LoginScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 import { useAutoLogout } from "../hooks/useAutoLogout";
 import { useCurrentUserSync } from "../hooks/useCurrentUserSync";
 import { useRealtime } from "../hooks/useRealtime";
@@ -26,6 +27,7 @@ export type RootStackParamList = {
   Attendance: undefined;
   Leave: undefined;
   LeaveApply: undefined;
+  Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,6 +70,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Attendance" component={AttendanceScreen} />
             <Stack.Screen name="Leave" component={LeaveScreen} />
             <Stack.Screen name="LeaveApply" component={LeaveApplyScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
           </Stack.Group>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />

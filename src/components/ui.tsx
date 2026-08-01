@@ -11,6 +11,7 @@ import Animated, {
 
 import { radius, shadow, space, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
+import { T } from '../theme/type';
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 
@@ -65,7 +66,7 @@ export function SectionHeader({
       className="flex-row items-center justify-between"
       style={{ paddingHorizontal: space.screen, marginBottom: space.md }}
     >
-      <Text style={{ color: c.text }} className="font-ui-semibold text-[18px]">
+      <Text style={{ color: c.text }} className={T.section}>
         {title}
       </Text>
       {onPress ? (
@@ -77,10 +78,7 @@ export function SectionHeader({
           style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
           className="flex-row items-center gap-0.5"
         >
-          <Text
-            style={{ color: brand[600] }}
-            className="font-ui-semibold text-[13px]"
-          >
+          <Text style={{ color: brand[600] }} className={T.label}>
             {action ?? 'View all'}
           </Text>
           <ChevronRight size={15} strokeWidth={2} color={brand[600]} />
@@ -136,6 +134,15 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: off, busy: loading }}
+      // NO `className` here, and none on the label either.
+      //
+      // A FUNCTION `style` prop plus a `className` on the same Pressable is the
+      // one combination NativeWind cannot merge reliably — it injects its own
+      // style and the function's object loses, taking `backgroundColor` with
+      // it. That is how a primary button ended up transparent: white on a white
+      // sheet, present and pressable but invisible, which read as "there is no
+      // submit button". Layout, fill and type all live in plain styles now, so
+      // there is nothing left to merge.
       style={({ pressed }) => [
         {
           height: 52,
@@ -146,18 +153,38 @@ export function Button({
           opacity: off ? 0.55 : pressed ? 0.85 : 1,
           alignSelf: full ? 'stretch' : 'flex-start',
           paddingHorizontal: space.xl,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
         },
         style,
       ]}
-      className="flex-row items-center justify-center gap-2.5"
     >
       {loading ? <ActivityIndicator size="small" color={p.fg} /> : icon}
-      <Text style={{ color: p.fg }} className="font-ui-semibold text-[15px]">
+      {/* One line, always. A wrapped button label is the loudest possible way
+          to say the layout was never checked. */}
+      <Text
+        style={{
+          color: p.fg,
+          fontFamily: 'Outfit_600SemiBold',
+          fontSize: 15,
+        }}
+        numberOfLines={1}
+        allowFontScaling={false}
+      >
         {label}
       </Text>
     </Pressable>
   );
 }
+
+/* ── Segmented control ────────────────────────────────────────────────────── */
+
+// Lives in its own file — it is the one control here with real motion in it.
+// Re-exported so every existing `import { Segmented } from '../components/ui'`
+// keeps working untouched.
+export { Segmented, type Segment } from './Segmented';
 
 /* ── Badge ────────────────────────────────────────────────────────────────── */
 
@@ -181,11 +208,7 @@ export function Badge({
           className="h-1.5 w-1.5 rounded-full"
         />
       )}
-      <Text
-        style={{ color: tone.text }}
-        className="font-ui-semibold text-[12px]"
-        numberOfLines={1}
-      >
+      <Text style={{ color: tone.text }} className={T.badge} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -322,16 +345,13 @@ export function EmptyState({
       >
         {icon}
       </View>
-      <Text
-        style={{ color: c.text }}
-        className="mt-4 text-center font-ui-semibold text-[16px]"
-      >
+      <Text style={{ color: c.text }} className={`mt-4 text-center ${T.cardTitle}`}>
         {title}
       </Text>
       {message ? (
         <Text
           style={{ color: c.textMuted }}
-          className="mt-1.5 text-center font-ui-regular text-[13px] leading-5"
+          className={`mt-1.5 text-center leading-5 ${T.secondary}`}
         >
           {message}
         </Text>

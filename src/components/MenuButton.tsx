@@ -24,7 +24,7 @@ export function MenuButton({
   onPress: () => void;
   accessibilityLabel?: string;
 }) {
-  const { brand, primary } = useTheme();
+  const { brand, c, primary } = useTheme();
   const press = useSharedValue(0);
 
   const style = useAnimatedStyle(() => ({
@@ -53,11 +53,13 @@ export function MenuButton({
           borderRadius: 14,
           borderWidth: 1,
           borderColor: primary.border,
-
+          // `bg-white` was hardcoded here, which turned the button into a white
+          // block on the dark canvas.
+          backgroundColor: c.card,
         },
         style,
       ]}
-      className="items-center justify-center bg-white"
+      className="items-center justify-center"
     >
       <List size={21} strokeWidth={2.2} color={brand[600]} />
     </AnimatedPressable>

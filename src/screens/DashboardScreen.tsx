@@ -3,14 +3,16 @@ import { useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AccountCard } from "../components/AccountCard";
 import { AppDrawer } from "../components/AppDrawer";
 import { AttendanceCard } from "../components/AttendanceCard";
+import { fullNameOf } from "../components/Avatar";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { LeaveBalanceCard } from "../components/LeaveBalanceCard";
 import { NotificationButton } from "../components/NotificationButton";
 import { NotificationSheet } from "../components/NotificationSheet";
+import { ProfileButton } from "../components/ProfileButton";
 import { QuickActions } from "../components/QuickActions";
+import { WeekSummary } from "../components/WeekSummary";
 import { SectionHeader } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { selectCurrentUser, useAppSelector } from "../store";
@@ -18,14 +20,20 @@ import { useGetMyTodayQuery } from "../store/attendanceApi";
 import { useGetMyBalanceQuery } from "../store/leaveApi";
 import { space } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
-import { MONTHS, WEEKDAYS_LONG } from "../utils/date";
+import { T } from "../theme/type";
 
-/** Greeting + the line under it. Time-of-day, not a random quote generator. */
-function greeting(): { hello: string; sub: string } {
+/**
+ * Time-of-day greeting. Two lines only — the lead-in and the name.
+ *
+ * The third line ("Have a great day at work") was cut: it said nothing the app
+ * did not already know, and it pushed the attendance card down by a full row of
+ * type to do it.
+ */
+function greeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return { hello: "Good Morning", sub: "Have a productive day ahead." };
-  if (h < 17) return { hello: "Good Afternoon", sub: "Hope the day is going well." };
-  return { hello: "Good Evening", sub: "Wrapping up for the day?" };
+  if (h < 12) return "Good morning,";
+  if (h < 17) return "Good afternoon,";
+  return "Good evening,";
 }
 
 /**
@@ -48,7 +56,8 @@ export default function DashboardScreen() {
 
   // Pull-to-refresh refreshes everything on screen, not just one card.
   const refreshing =
-    (today.isFetching && !today.isLoading) || (balance.isFetching && !balance.isLoading);
+    (today.isFetching && !today.isLoading) ||
+    (balance.isFetching && !balance.isLoading);
 
   const refreshAll = () => {
     today.refetch();
@@ -61,19 +70,21 @@ export default function DashboardScreen() {
     if (key === "attendance") navigation.navigate("Attendance");
     else if (key === "leaves") navigation.navigate("Leave");
     else if (key === "apply") navigation.navigate("LeaveApply");
+    else if (key === "profile") navigation.navigate("Profile");
     else if (key === "more") setMenuOpen(true);
   };
 
-  const now = new Date();
-  const dateLine = `${WEEKDAYS_LONG[now.getDay()]}, ${now.getDate()} ${
-    MONTHS[now.getMonth()]
-  } ${now.getFullYear()}`;
-  const { hello, sub } = greeting();
+  const hello = greeting();
+  // First name only — the full name pushes the line to two rows on a narrow
+  // phone, and the greeting is meant to read as one glance.
+  const firstName = user?.first_name?.trim() || fullNameOf(user).split(" ")[0];
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 16 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 16,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -84,6 +95,10 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Greeting ─────────────────────────────────────────────────── */}
+        {/* The greeting owns the whole left side. There is no menu button here
+            on purpose — the drawer already has a home in the bottom bar's
+            "More" tab, and a hamburger competing with the name made the top of
+            the screen read as chrome instead of as a welcome. */}
         <View
           style={{
             paddingTop: insets.top + space.md,
@@ -93,40 +108,34 @@ export default function DashboardScreen() {
           className="flex-row items-start justify-between"
         >
           <View className="flex-1 pr-3">
-            <Text style={{ color: c.text }} className="font-display text-[28px] leading-9">
-              {hello} 👋
+            <Text style={{ color: c.textMuted }} className={T.body}>
+              {hello}
             </Text>
             <Text
-              style={{ color: c.textMuted }}
-              className="mt-1 font-ui-regular text-[14px]"
+              style={{ color: c.text }}
+              className={`mt-0.5 ${T.screenTitle}`}
               numberOfLines={1}
             >
-              {sub}
-            </Text>
-            <Text style={{ color: c.textFaint }} className="mt-1 font-ui text-[12px]">
-              {dateLine}
+              {firstName} 👋
             </Text>
           </View>
 
-          {/* Bell, not a hamburger: the drawer is one tap away on the profile
-              card and the "More" tab, but an unread badge has nowhere else to
-              live. */}
-          <NotificationButton onPress={() => setNotificationsOpen(true)} />
-        </View>
-
-        {/* ── Who's signed in ──────────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: space.screen }}>
-          <AccountCard
-            user={user}
-            onDuty={today.data?.state === "clocked_in"}
-            onPress={() => setMenuOpen(true)}
-          />
+          {/* Nudged down so the pair sits level with the name, not the lead-in. */}
+          <View
+            style={{ marginTop: space.sm }}
+            className="flex-row items-center gap-2.5"
+          >
+            <NotificationButton onPress={() => setNotificationsOpen(true)} />
+            <ProfileButton
+              user={user}
+              onDuty={today.data?.state === "clocked_in"}
+              onPress={() => navigation.navigate("Profile")}
+            />
+          </View>
         </View>
 
         {/* ── Today's attendance (the punch lives here) ─────────────────── */}
-        <View style={{ marginTop: space.lg }}>
-          <AttendanceCard onViewAll={() => navigation.navigate("Attendance")} />
-        </View>
+        <AttendanceCard />
 
         {/* ── Shortcuts ────────────────────────────────────────────────── */}
         <View style={{ marginTop: space.xxl }}>
@@ -134,8 +143,17 @@ export default function DashboardScreen() {
           <QuickActions onOpen={open} onMore={() => setMenuOpen(true)} />
         </View>
 
+        {/* ── This week ────────────────────────────────────────────────── */}
+        <View style={{ marginTop: space.xxl }}>
+          <SectionHeader
+            title="This Week Summary"
+            onPress={() => navigation.navigate("Attendance")}
+          />
+          <WeekSummary />
+        </View>
+
         {/* ── Leave balance ────────────────────────────────────────────── */}
-        <View style={{ marginTop: space.lg }}>
+        <View style={{ marginTop: space.xxl }}>
           <SectionHeader
             title="Leave Balance"
             onPress={() => navigation.navigate("Leave")}

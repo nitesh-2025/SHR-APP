@@ -36,6 +36,9 @@ export function BalanceTile({
   // Dark mode drops the pastel fills — a tint that reads as "soft" on white
   // reads as "muddy" on a dark surface.
   const bg = filled ? tone.tint : dark ? c.card : tone.bg;
+  // A tinted tile on a white-smoke canvas needs its own edge; the filled one
+  // already has maximum contrast and a border would only muddy it.
+  const borderColor = filled ? 'transparent' : dark ? c.border : tone.border;
   const labelColor = filled ? 'rgba(255,255,255,0.85)' : dark ? c.textMuted : tone.text;
   const valueColor = filled ? '#FFFFFF' : c.text;
   const subColor = filled ? 'rgba(255,255,255,0.75)' : c.textMuted;
@@ -46,10 +49,15 @@ export function BalanceTile({
         width,
         backgroundColor: bg,
         borderRadius: radius.card,
+        borderWidth: filled ? 0 : 1,
+        borderColor,
         paddingHorizontal: space.lg,
         paddingTop: space.lg,
         paddingBottom: space.lg,
-        ...(dark ? shadow.none : shadow.card),
+        // No shadow. Inside a horizontal ScrollView the blur was being clipped
+        // by the scroll frame, which cropped the bottom corners and made the
+        // tiles look pressed into the canvas.
+        ...shadow.none,
       }}
     >
       <Text
