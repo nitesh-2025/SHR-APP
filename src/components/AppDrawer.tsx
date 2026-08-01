@@ -40,7 +40,7 @@ const MENU: MenuEntry[] = [
   { key: "leaves", label: "My Leaves", icon: ClipboardList },
   { key: "attendance", label: "Attendance", icon: CalendarDays },
   { key: "chat", label: "Chat", icon: MessageSquare },
-  { key: "team", label: "My Team", icon: UsersRound },
+  { key: "team", label: "Team", icon: UsersRound },
   { key: "birthday", label: "Birthdays", icon: Cake },
   { key: "meeting", label: "Meeting", icon: Users, soon: true },
   { key: "calendar", label: "Calendar", icon: CalendarDays, soon: true },

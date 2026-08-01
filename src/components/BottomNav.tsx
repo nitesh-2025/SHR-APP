@@ -1,6 +1,7 @@
 import {
   CalendarCheck,
   House,
+  MessageCircle,
   Plus,
   TreePalm,
   UserRound,
@@ -16,11 +17,12 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PunchSheet } from "./PunchSheet";
+import { useGetThreadsQuery } from "../store/chatApi";
 import { neutral, radius, shadow } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 
-export type NavKey = "home" | "attendance" | "leaves" | "profile";
+export type NavKey = "home" | "attendance" | "chat" | "profile";
 
 interface Tab {
   key: NavKey;
@@ -41,7 +43,7 @@ const LEFT: Tab[] = [
 ];
 
 const RIGHT: Tab[] = [
-  { key: "leaves", label: "Leaves", icon: TreePalm },
+  { key: "chat", label: "Chat", icon: MessageCircle },
   { key: "profile", label: "Profile", icon: UserRound },
 ];
 
@@ -66,10 +68,13 @@ export const BOTTOM_NAV_CLEARANCE = BOTTOM_NAV_HEIGHT + 12;
 function Item({
   tab,
   active,
+  badge,
   onPress,
 }: {
   tab: Tab;
   active: boolean;
+  /** Text for the corner badge — `null` when there is nothing waiting. */
+  badge?: string | null;
   onPress: () => void;
 }) {
   const Icon = tab.icon;
@@ -133,6 +138,34 @@ function Item({
             fill={active ? primary.bg : "none"}
           />
         </Animated.View>
+
+        {/* Ringed in the BAR's colour, not white — on a dark bar a white ring
+            reads as a halo around the badge. */}
+        {badge ? (
+          <View
+            style={{
+              position: "absolute",
+              top: -2,
+              right: 2,
+              minWidth: 18,
+              height: 18,
+              paddingHorizontal: 5,
+              borderRadius: radius.pill,
+              backgroundColor: brand[600],
+              borderWidth: 2,
+              borderColor: c.card,
+            }}
+            className="items-center justify-center"
+          >
+            <Text
+              className={`text-white ${T.count}`}
+              allowFontScaling={false}
+              numberOfLines={1}
+            >
+              {badge}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <Text
@@ -168,6 +201,25 @@ export function BottomNav({
   const insets = useSafeAreaInsets();
   const { c, brand, dark } = useTheme();
   const [punchOpen, setPunchOpen] = useState(false);
+
+  /* ── Chat badge ─────────────────────────────────────────────────────────
+     Off the same cached `Threads` query every chat screen reads, so the bar
+     costs no extra request and `useRealtime` keeps it live: the badge drops
+     the moment the conversation is opened on ANY device.
+
+     A server that returns threads without per-thread counts still has to say
+     something is waiting, hence "New" — a badge that silently disappears
+     because the number was 0 is worse than an unnumbered one. */
+  const { data: threads } = useGetThreadsQuery();
+  const chatBadge = (() => {
+    const list = threads ?? [];
+    const total = list.reduce((n, t) => n + (t.unread || 0), 0);
+    if (total > 0) return total > 99 ? "99+" : String(total);
+    // No number to show is not the same as nothing to say — a server that
+    // omits per-thread counts still has to surface that chat is live, so the
+    // tab carries the word instead of a silent, empty corner.
+    return "New";
+  })();
 
   const press = useSharedValue(0);
   const fabStyle = useAnimatedStyle(() => ({
@@ -213,6 +265,7 @@ export function BottomNav({
               key={t.key}
               tab={t}
               active={t.key === active}
+              badge={t.key === "chat" ? chatBadge : null}
               onPress={() => onSelect(t.key)}
             />
           ))}

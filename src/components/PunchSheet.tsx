@@ -5,8 +5,8 @@ import {
   LogOut,
   Play,
   type LucideIcon,
-} from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+} from "lucide-react-native";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,14 +14,18 @@ import {
   Text,
   useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { currentBreakMinutes, shiftMinutes, workedMinutes } from './AttendanceCard';
-import { BottomSheet } from './BottomSheet';
-import { Button } from './ui';
-import { LONG_BREAK_MIN } from '../config/env';
-import { describeApiError } from '../lib/apiError';
-import { toast } from '../lib/toast';
+import {
+  currentBreakMinutes,
+  shiftMinutes,
+  workedMinutes,
+} from "./AttendanceCard";
+import { BottomSheet } from "./BottomSheet";
+import { Button } from "./ui";
+import { LONG_BREAK_MIN } from "../config/env";
+import { describeApiError } from "../lib/apiError";
+import { toast } from "../lib/toast";
 import {
   useBreakInMutation,
   useBreakOutMutation,
@@ -29,14 +33,14 @@ import {
   useClockOutMutation,
   useGetMyTodayQuery,
   type PunchBody,
-} from '../store/attendanceApi';
-import { radius, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { fmtDuration, fmtTime } from '../utils/date';
+} from "../store/attendanceApi";
+import { radius, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { fmtDuration, fmtTime } from "../utils/date";
 
 /** The sheet swaps its contents rather than opening a second sheet. See below. */
-type Step = 'actions' | 'confirmOut';
+type Step = "actions" | "confirmOut";
 
 interface Row {
   key: string;
@@ -48,11 +52,23 @@ interface Row {
   run: () => void;
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
   const { c } = useTheme();
   return (
     <View className="flex-1 items-center">
-      <Text style={{ color: c.textMuted }} className={T.micro} numberOfLines={1}>
+      <Text
+        style={{ color: c.textMuted }}
+        className={T.micro}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       <Text
@@ -103,7 +119,10 @@ function ActionRow({ row, disabled }: { row: Row; disabled: boolean }) {
       className="flex-row items-center gap-3 px-4 py-3.5"
     >
       <View
-        style={{ backgroundColor: row.tone.tint, borderRadius: radius.well - 4 }}
+        style={{
+          backgroundColor: row.tone.tint,
+          borderRadius: radius.well - 4,
+        }}
         className="h-10 w-10 items-center justify-center"
       >
         {row.busy ? (
@@ -154,20 +173,20 @@ export function PunchSheet({
   const [breakOut, breakOutState] = useBreakOutMutation();
   const [breakIn, breakInState] = useBreakInMutation();
 
-  const [step, setStep] = useState<Step>('actions');
-  const [error, setError] = useState('');
+  const [step, setStep] = useState<Step>("actions");
+  const [error, setError] = useState("");
 
   // Always reopen on the action list. Coming back to a half-finished confirm
   // from a previous session is nobody's expectation.
   useEffect(() => {
     if (visible) {
-      setStep('actions');
-      setError('');
+      setStep("actions");
+      setError("");
     }
   }, [visible]);
 
   const state = record?.state;
-  const onBreak = state === 'on_break';
+  const onBreak = state === "on_break";
   // The sheet is short-lived, so a snapshot on open is enough — no ticker.
   const now = Date.now();
   const worked = workedMinutes(record, now);
@@ -190,7 +209,7 @@ export function PunchSheet({
     fn: (body: PunchBody) => { unwrap: () => Promise<unknown> },
     okMessage: string,
   ) => {
-    setError('');
+    setError("");
     try {
       await fn(undefined).unwrap();
       toast.success(okMessage);
@@ -208,45 +227,45 @@ export function PunchSheet({
 
   if (!state) {
     rows.push({
-      key: 'in',
-      label: 'Clock In',
-      hint: 'Start your day',
+      key: "in",
+      label: "Clock In",
+      hint: "Start your day",
       icon: LogIn,
       tone: surface.success,
       busy: clockInState.isLoading,
-      run: () => punch(clockIn, 'Clocked in'),
+      run: () => punch(clockIn, "Clocked in"),
     });
-  } else if (state !== 'clocked_out') {
-    if (state === 'clocked_in' && !breakTaken) {
+  } else if (state !== "clocked_out") {
+    if (state === "clocked_in" && !breakTaken) {
       rows.push({
-        key: 'break',
-        label: 'Start Break',
-        hint: 'Pauses the clock',
+        key: "break",
+        label: "Start Break",
+        hint: "Pauses the clock",
         icon: Coffee,
         tone: surface.warning,
         busy: breakOutState.isLoading,
-        run: () => punch(breakOut, 'Break started'),
+        run: () => punch(breakOut, "Break started"),
       });
     }
     if (onBreak) {
       rows.push({
-        key: 'resume',
-        label: 'Resume Work',
-        hint: 'Restarts the clock',
+        key: "resume",
+        label: "Resume Work",
+        hint: "Restarts the clock",
         icon: Play,
         tone: surface.info,
         busy: breakInState.isLoading,
-        run: () => punch(breakIn, 'Welcome back'),
+        run: () => punch(breakIn, "Welcome back"),
       });
     }
     rows.push({
-      key: 'out',
-      label: 'Clock Out',
-      hint: 'Ends your shift',
+      key: "out",
+      label: "Clock Out",
+      hint: "Ends your shift",
       icon: LogOut,
       tone: surface.danger,
       busy: clockOutState.isLoading,
-      run: () => setStep('confirmOut'),
+      run: () => setStep("confirmOut"),
     });
   }
 
@@ -275,14 +294,17 @@ export function PunchSheet({
         contentContainerStyle={{
           paddingHorizontal: space.screen,
           paddingTop: space.sm,
-          paddingBottom: step === 'confirmOut' ? space.sm : space.screen,
+          paddingBottom: step === "confirmOut" ? space.sm : space.screen,
         }}
       >
-        {step === 'confirmOut' ? (
+        {step === "confirmOut" ? (
           /* ── Confirm ──────────────────────────────────────────────────── */
           <>
             <View
-              style={{ backgroundColor: surface.danger.bg, borderRadius: radius.pill }}
+              style={{
+                backgroundColor: surface.danger.bg,
+                borderRadius: radius.pill,
+              }}
               className="h-14 w-14 items-center justify-center self-center"
             >
               <LogOut size={26} strokeWidth={2} color={surface.danger.tint} />
@@ -310,13 +332,24 @@ export function PunchSheet({
               }}
               className="flex-row items-center"
             >
-              <Stat label="Clocked in" value={fmtTime(record?.clock_in?.at) ?? '--:--'} />
-              <View style={{ backgroundColor: c.border }} className="h-8 w-px" />
+              <Stat
+                label="Clocked in"
+                value={fmtTime(record?.clock_in?.at) ?? "--:--"}
+              />
+              <View
+                style={{ backgroundColor: c.border }}
+                className="h-8 w-px"
+              />
               <Stat label="Worked" value={fmtDuration(worked)} />
-              <View style={{ backgroundColor: c.border }} className="h-8 w-px" />
-              <Stat label="Break" value={fmtDuration(record?.total_break_minutes ?? 0)} />
+              <View
+                style={{ backgroundColor: c.border }}
+                className="h-8 w-px"
+              />
+              <Stat
+                label="Break"
+                value={fmtDuration(record?.total_break_minutes ?? 0)}
+              />
             </View>
-
           </>
         ) : (
           /* ── Actions ──────────────────────────────────────────────────── */
@@ -336,14 +369,23 @@ export function PunchSheet({
               }}
               className="flex-row items-center"
             >
-              <Stat label="Clocked in" value={fmtTime(record?.clock_in?.at) ?? '--:--'} />
-              <View style={{ backgroundColor: c.border }} className="h-8 w-px" />
+              <Stat
+                label="Clocked in"
+                value={fmtTime(record?.clock_in?.at) ?? "--:--"}
+              />
+              <View
+                style={{ backgroundColor: c.border }}
+                className="h-8 w-px"
+              />
               <Stat label="Worked" value={fmtDuration(worked)} />
-              <View style={{ backgroundColor: c.border }} className="h-8 w-px" />
+              <View
+                style={{ backgroundColor: c.border }}
+                className="h-8 w-px"
+              />
               {/* Mid-break the number worth showing is the break, not the shift
                   remainder — that is the one being spent right now. */}
               <Stat
-                label={onBreak ? 'On break' : 'Remaining'}
+                label={onBreak ? "On break" : "Remaining"}
                 value={fmtDuration(onBreak ? breakNow : remaining)}
                 tone={breakOverrun ? surface.warning.text : undefined}
               />
@@ -374,7 +416,7 @@ export function PunchSheet({
 
           The error sits here too, for the same reason: a failed clock-out has
           to be readable next to the button that failed. */}
-      {step === 'confirmOut' ? (
+      {step === "confirmOut" ? (
         <View
           style={{
             paddingHorizontal: space.screen,
@@ -395,8 +437,9 @@ export function PunchSheet({
               button (see the note in `ui.tsx`). */}
           <View
             style={{
-              flexDirection: 'row',
+              flexDirection: "row",
               gap: space.md,
+              justifyContent: "space-between",
               marginTop: space.lg,
             }}
           >
@@ -408,17 +451,17 @@ export function PunchSheet({
               variant="secondary"
               full={false}
               disabled={clockOutState.isLoading}
-              onPress={() => setStep('actions')}
+              onPress={() => setStep("actions")}
               style={{ flex: 1 }}
             />
             {/* `primary` = solid brand fill, white type. The most contrast the
                 system has, which is what the committing action needs. */}
             <Button
               label="Yes, Clock Out"
-              variant="primary"
+              variant="danger"
               full={false}
               loading={clockOutState.isLoading}
-              onPress={() => punch(clockOut, 'Clocked out')}
+              onPress={() => punch(clockOut, "Clocked out")}
               style={{ flex: 1 }}
             />
           </View>

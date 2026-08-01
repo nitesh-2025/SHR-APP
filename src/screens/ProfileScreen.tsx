@@ -1,5 +1,5 @@
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,24 +12,30 @@ import {
   ShieldCheck,
   UserRoundCog,
   type LucideIcon,
-} from 'lucide-react-native';
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "lucide-react-native";
+import { useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import Svg, { Circle } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppDrawer } from '../components/AppDrawer';
-import { Avatar, fullNameOf } from '../components/Avatar';
-import { BOTTOM_NAV_CLEARANCE, BottomNav } from '../components/BottomNav';
-import { ShiftCard } from '../components/ShiftCard';
-import { ProgressBar } from '../components/ui';
-import type { RootStackParamList } from '../navigation/RootNavigator';
-import { selectCurrentUser, useAppDispatch, useAppSelector } from '../store';
-import { useGetMyProfileQuery } from '../store/employeesApi';
-import { clearCredentials } from '../store/authSlice';
-import { danger, radius, shadow, space } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
+import { AppDrawer } from "../components/AppDrawer";
+import { Avatar, fullNameOf } from "../components/Avatar";
+import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
+import { ShiftCard } from "../components/ShiftCard";
+import { ProgressBar } from "../components/ui";
+import type { RootStackParamList } from "../navigation/RootNavigator";
+import { selectCurrentUser, useAppDispatch, useAppSelector } from "../store";
+import { useGetMyProfileQuery } from "../store/employeesApi";
+import { clearCredentials } from "../store/authSlice";
+import { danger, radius, shadow, space } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
 
 interface Entry {
   key: string;
@@ -42,12 +48,12 @@ interface Entry {
 
 // Identity first, then money, then paperwork, then account controls.
 const ENTRIES: Entry[] = [
-  { key: 'personal', label: 'Personal Information', icon: CircleUserRound },
-  { key: 'bank', label: 'Bank Details', icon: Landmark },
-  { key: 'documents', label: 'Documents', icon: FileText, soon: true },
-  { key: 'emergency', label: 'Emergency Contact', icon: UserRoundCog },
-  { key: 'password', label: 'Change Password', icon: KeyRound, soon: true },
-  { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, soon: true },
+  { key: "personal", label: "Personal Information", icon: CircleUserRound },
+  { key: "bank", label: "Bank Details", icon: Landmark },
+  { key: "documents", label: "Documents", icon: FileText, soon: true },
+  { key: "emergency", label: "Emergency Contact", icon: UserRoundCog },
+  { key: "password", label: "Change Password", icon: KeyRound, soon: true },
+  { key: "privacy", label: "Privacy Policy", icon: ShieldCheck, soon: true },
 ];
 
 /* ── Decorative arcs on the identity card ─────────────────────────────────── */
@@ -59,7 +65,12 @@ const ENTRIES: Entry[] = [
 function CardArcs({ width, height }: { width: number; height: number }) {
   return (
     <View
-      style={{ pointerEvents: 'none', position: 'absolute', inset: 0, overflow: 'hidden' }}
+      style={{
+        pointerEvents: "none",
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+      }}
     >
       <Svg width={width} height={height}>
         {[0.44, 0.62, 0.82].map((r, i) => (
@@ -103,14 +114,16 @@ function Row({
         accessibilityRole="button"
         accessibilityLabel={entry.label}
         accessibilityState={{ disabled: soon }}
-        accessibilityHint={soon ? 'Coming soon' : undefined}
+        accessibilityHint={soon ? "Coming soon" : undefined}
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         className="h-14 flex-row items-center gap-3.5 px-4"
       >
         <Icon size={20} strokeWidth={1.8} color={ink} />
 
         <Text
-          style={{ color: entry.danger ? danger[600] : soon ? c.textMuted : c.text }}
+          style={{
+            color: entry.danger ? danger[600] : soon ? c.textMuted : c.text,
+          }}
           className="flex-1 font-ui text-[15px]"
           numberOfLines={1}
         >
@@ -118,7 +131,10 @@ function Row({
         </Text>
 
         {soon ? (
-          <Text style={{ color: c.textFaint }} className="font-ui-regular text-[11.5px]">
+          <Text
+            style={{ color: c.textFaint }}
+            className="font-ui-regular text-[11.5px]"
+          >
             Soon
           </Text>
         ) : (
@@ -132,7 +148,10 @@ function Row({
 
       {/* Inset so the rule starts under the label, not under the glyph. */}
       {last ? null : (
-        <View style={{ backgroundColor: c.border, marginLeft: 54 }} className="h-px" />
+        <View
+          style={{ backgroundColor: c.border, marginLeft: 54 }}
+          className="h-px"
+        />
       )}
     </>
   );
@@ -166,13 +185,13 @@ export default function ProfileScreen() {
   const cardHeight = 132;
 
   const go = (key: string) => {
-    if (key === 'home') navigation.navigate('Dashboard');
-    else if (key === 'attendance') navigation.navigate('Attendance');
-    else if (key === 'leaves') navigation.navigate('Leave');
-    else if (key === 'apply') navigation.navigate('LeaveApply');
-    else if (key === 'personal' || key === 'bank' || key === 'emergency')
-      navigation.navigate('ProfileEdit', { section: key });
-    else if (key === 'more') setMenuOpen(true);
+    if (key === "home") navigation.navigate("Dashboard");
+    else if (key === "attendance") navigation.navigate("Attendance");
+    else if (key === "leaves") navigation.navigate("Leave");
+    else if (key === "apply") navigation.navigate("LeaveApply");
+    else if (key === "personal" || key === "bank" || key === "emergency")
+      navigation.navigate("ProfileEdit", { section: key });
+    else if (key === "more") setMenuOpen(true);
   };
 
   return (
@@ -227,8 +246,8 @@ export default function ProfileScreen() {
             height: cardHeight,
             borderRadius: radius.card,
             paddingHorizontal: space.lg + 2,
-            justifyContent: 'center',
-            overflow: 'hidden',
+            justifyContent: "center",
+            overflow: "hidden",
             ...shadow.card,
           }}
         >
@@ -253,11 +272,17 @@ export default function ProfileScreen() {
                 </Text>
               ) : null}
               {user?.employee_id ? (
-                <Text className="mt-1 font-ui text-[13px] text-white/90" numberOfLines={1}>
+                <Text
+                  className="mt-1 font-ui text-[13px] text-white/90"
+                  numberOfLines={1}
+                >
                   Emp ID: {user.employee_id}
                 </Text>
               ) : (
-                <Text className="mt-1 font-ui text-[13px] text-white/90" numberOfLines={1}>
+                <Text
+                  className="mt-1 font-ui text-[13px] text-white/90"
+                  numberOfLines={1}
+                >
                   {user?.email}
                 </Text>
               )}
@@ -270,10 +295,12 @@ export default function ProfileScreen() {
             counts. Hidden entirely at 100% and when the server sends no score —
             a full bar is a bar that has nothing left to say, and a bar built
             from a guessed denominator is worse than none. */}
-        {typeof profile.data?.profile_score === 'number' &&
+        {typeof profile.data?.profile_score === "number" &&
         profile.data.profile_score < 100 ? (
           <Pressable
-            onPress={() => navigation.navigate('ProfileEdit', { section: 'personal' })}
+            onPress={() =>
+              navigation.navigate("ProfileEdit", { section: "personal" })
+            }
             accessibilityRole="button"
             accessibilityLabel={`Profile ${profile.data.profile_score}% complete. Fill in the rest`}
             style={({ pressed }) => ({
@@ -309,10 +336,11 @@ export default function ProfileScreen() {
                 className={`mt-2 ${T.micro}`}
                 numberOfLines={2}
               >
-                Missing: {profile.data.profile_score_meta.missing.slice(0, 4).join(', ')}
+                Missing:{" "}
+                {profile.data.profile_score_meta.missing.slice(0, 4).join(", ")}
                 {profile.data.profile_score_meta.missing.length > 4
                   ? ` +${profile.data.profile_score_meta.missing.length - 4} more`
-                  : ''}
+                  : ""}
               </Text>
             ) : null}
           </Pressable>
@@ -339,7 +367,7 @@ export default function ProfileScreen() {
             borderRadius: radius.card,
             borderWidth: 1,
             borderColor: c.border,
-            overflow: 'hidden',
+            overflow: "hidden",
           }}
         >
           {ENTRIES.map((e, i) => (
@@ -351,10 +379,18 @@ export default function ProfileScreen() {
             />
           ))}
 
-          <View style={{ backgroundColor: c.border, marginLeft: 54 }} className="h-px" />
+          <View
+            style={{ backgroundColor: c.border, marginLeft: 54 }}
+            className="h-px"
+          />
 
           <Row
-            entry={{ key: 'logout', label: 'Logout', icon: LogOut, danger: true }}
+            entry={{
+              key: "logout",
+              label: "Logout",
+              icon: LogOut,
+              danger: true,
+            }}
             last
             onPress={() => dispatch(clearCredentials())}
           />

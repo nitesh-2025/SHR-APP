@@ -132,7 +132,6 @@ export const space = {
   xl: 20,
   xxl: 24,
   xxxl: 32,
-  /** Screen side padding. */
   screen: 20,
 } as const;
 

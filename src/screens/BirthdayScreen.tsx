@@ -1,52 +1,68 @@
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Cake, ChevronLeft, Gift, PartyPopper, Send, UsersRound } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  Cake,
+  ChevronLeft,
+  Gift,
+  PartyPopper,
+  Send,
+  UsersRound,
+} from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Share,
+  Text,
+  View,
+} from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar, fullNameOf, personUser } from '../components/Avatar';
-import { BottomSheet } from '../components/BottomSheet';
-import { Badge, Button, EmptyState, Skeleton } from '../components/ui';
-import { describeApiError } from '../lib/apiError';
-import { toast } from '../lib/toast';
-import type { RootStackParamList } from '../navigation/RootNavigator';
-import { selectCurrentUser, useAppSelector } from '../store';
+import { Avatar, fullNameOf, personUser } from "../components/Avatar";
+import { BottomSheet } from "../components/BottomSheet";
+import { Badge, Button, EmptyState, Skeleton } from "../components/ui";
+import { describeApiError } from "../lib/apiError";
+import { toast } from "../lib/toast";
+import type { RootStackParamList } from "../navigation/RootNavigator";
+import { selectCurrentUser, useAppSelector } from "../store";
 import {
   useGetUpcomingBirthdaysQuery,
   type UpcomingBirthday,
-} from '../store/employeesApi';
-import { radius, shadow, space, surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { fmtDayShort } from '../utils/date';
+} from "../store/employeesApi";
+import { radius, shadow, space, surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { fmtDayShort } from "../utils/date";
 
 /** How far ahead to look. A month is far enough to plan, near enough to care. */
 const WINDOW_DAYS = 30;
 
 /** Ready-made wishes. Picked, not typed — nobody composes prose on a phone. */
 const MESSAGES = [
-  (first: string) => `Happy birthday, ${first}! 🎉 Wishing you a fantastic year ahead.`,
+  (first: string) =>
+    `Happy birthday, ${first}! 🎉 Wishing you a fantastic year ahead.`,
   (first: string) =>
     `Many happy returns of the day, ${first}! 🎂 Hope your day is as brilliant as you are.`,
   (first: string) =>
     `Happy birthday ${first}! 🥳 Thanks for everything you do for the team — have a great one.`,
 ];
 
-const firstNameOf = (name?: string) => (name ?? '').trim().split(/\s+/)[0] || 'there';
+const firstNameOf = (name?: string) =>
+  (name ?? "").trim().split(/\s+/)[0] || "there";
 
 /** `0 → Today`, `1 → Tomorrow`, `n → in n days`. */
 function whenLabel(days: number): string {
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
+  if (days <= 0) return "Today";
+  if (days === 1) return "Tomorrow";
   return `in ${days} days`;
 }
 
@@ -71,7 +87,10 @@ function FloatingGift() {
   }, [lift]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -lift.value * 6 }, { rotate: `${-4 + lift.value * 8}deg` }],
+    transform: [
+      { translateY: -lift.value * 6 },
+      { rotate: `${-4 + lift.value * 8}deg` },
+    ],
   }));
 
   return (
@@ -108,7 +127,7 @@ function MyBirthdayHero({ name }: { name: string }) {
     >
       <View className="flex-row items-center gap-3">
         <View
-          style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+          style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
           className="h-14 w-14 items-center justify-center rounded-full"
         >
           <FloatingGift />
@@ -116,7 +135,7 @@ function MyBirthdayHero({ name }: { name: string }) {
 
         <View className="flex-1">
           <Text
-            style={{ color: 'rgba(255,255,255,0.82)' }}
+            style={{ color: "rgba(255,255,255,0.82)" }}
             className={T.label}
             allowFontScaling={false}
           >
@@ -129,11 +148,11 @@ function MyBirthdayHero({ name }: { name: string }) {
       </View>
 
       <Text
-        style={{ color: 'rgba(255,255,255,0.88)' }}
+        style={{ color: "rgba(255,255,255,0.88)" }}
         className={`mt-3 leading-5 ${T.secondary}`}
       >
-        Everyone at SHR wishes you a brilliant year ahead. Have a wonderful day —
-        the clock can wait a few minutes today.
+        Everyone at SHR wishes you a brilliant year ahead. Have a wonderful day
+        — the clock can wait a few minutes today.
       </Text>
     </LinearGradient>
   );
@@ -166,7 +185,7 @@ function TodayCard({
           <Avatar user={personUser(person)} size={52} />
           <View
             style={{
-              position: 'absolute',
+              position: "absolute",
               right: -2,
               bottom: -2,
               backgroundColor: surface.warning.tint,
@@ -180,12 +199,20 @@ function TodayCard({
         </View>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.cardTitle} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.cardTitle}
+            numberOfLines={1}
+          >
             {person.name || person.employee_id}
           </Text>
-          <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`} numberOfLines={1}>
-            {person.designation || '—'}
-            {person.department_name ? ` · ${person.department_name}` : ''}
+          <Text
+            style={{ color: c.textMuted }}
+            className={`mt-0.5 ${T.micro}`}
+            numberOfLines={1}
+          >
+            {person.designation || "—"}
+            {person.department_name ? ` · ${person.department_name}` : ""}
           </Text>
         </View>
       </View>
@@ -193,7 +220,7 @@ function TodayCard({
       <Pressable
         onPress={onWish}
         accessibilityRole="button"
-        accessibilityLabel={`Send birthday wishes to ${person.name ?? 'them'}`}
+        accessibilityLabel={`Send birthday wishes to ${person.name ?? "them"}`}
         style={({ pressed }) => ({
           marginTop: space.md,
           backgroundColor: brand[600],
@@ -203,7 +230,9 @@ function TodayCard({
         className="h-10 flex-row items-center justify-center gap-2"
       >
         <Send size={15} strokeWidth={2.4} color="#FFFFFF" />
-        <Text className="font-ui-semibold text-[13.5px] text-white">Send wishes</Text>
+        <Text className="font-ui-semibold text-[13.5px] text-white">
+          Send wishes
+        </Text>
       </Pressable>
     </View>
   );
@@ -230,17 +259,29 @@ function UpcomingRow({ person }: { person: UpcomingBirthday }) {
       <Avatar user={personUser(person)} size={42} />
 
       <View className="flex-1">
-        <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+        <Text
+          style={{ color: c.text }}
+          className={T.cardTitleSm}
+          numberOfLines={1}
+        >
           {person.name || person.employee_id}
         </Text>
-        <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`} numberOfLines={1}>
-          {person.designation || '—'}
-          {person.department_name ? ` · ${person.department_name}` : ''}
+        <Text
+          style={{ color: c.textMuted }}
+          className={`mt-0.5 ${T.micro}`}
+          numberOfLines={1}
+        >
+          {person.designation || "—"}
+          {person.department_name ? ` · ${person.department_name}` : ""}
         </Text>
       </View>
 
       <View className="items-end">
-        <Text style={{ color: c.text }} className={T.cardTitleSm} allowFontScaling={false}>
+        <Text
+          style={{ color: c.text }}
+          className={T.cardTitleSm}
+          allowFontScaling={false}
+        >
           {fmtDayShort(person.date_of_birth)}
         </Text>
         <Text style={{ color: c.textFaint }} className={`mt-0.5 ${T.nano}`}>
@@ -292,9 +333,10 @@ export default function BirthdayScreen() {
   const [wishing, setWishing] = useState<UpcomingBirthday | null>(null);
   const [pick, setPick] = useState(0);
 
-  const { data, isLoading, isFetching, error, refetch } = useGetUpcomingBirthdaysQuery({
-    days: WINDOW_DAYS,
-  });
+  const { data, isLoading, isFetching, error, refetch } =
+    useGetUpcomingBirthdaysQuery({
+      days: WINDOW_DAYS,
+    });
 
   const list = useMemo(() => data ?? [], [data]);
 
@@ -302,7 +344,8 @@ export default function BirthdayScreen() {
   const mine = useMemo(
     () =>
       list.find(
-        (b) => b.is_today && me?.employee_id && b.employee_id === me.employee_id,
+        (b) =>
+          b.is_today && me?.employee_id && b.employee_id === me.employee_id,
       ) ?? null,
     [list, me],
   );
@@ -315,19 +358,24 @@ export default function BirthdayScreen() {
     () => list.filter((b) => !b.is_today && b.days_until <= 7),
     [list],
   );
-  const later = useMemo(() => list.filter((b) => !b.is_today && b.days_until > 7), [list]);
+  const later = useMemo(
+    () => list.filter((b) => !b.is_today && b.days_until > 7),
+    [list],
+  );
 
   const share = async (person: UpcomingBirthday) => {
     const message = MESSAGES[pick](firstNameOf(person.name));
     try {
       const result = await Share.share({ message });
       if (result.action === Share.sharedAction) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => {});
         setWishing(null);
-        toast.success('Wishes sent 🎉');
+        toast.success("Wishes sent 🎉");
       }
     } catch {
-      toast.error('Share nahi ho paya.');
+      toast.error("Share nahi ho paya.");
     }
   };
 
@@ -355,20 +403,19 @@ export default function BirthdayScreen() {
         </Pressable>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.section} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.section}
+            numberOfLines={1}
+          >
             Birthdays
-          </Text>
-          <Text style={{ color: c.textMuted }} className={T.caption} numberOfLines={1}>
-            {isLoading
-              ? 'Loading…'
-              : `${list.length} in the next ${WINDOW_DAYS} days`}
           </Text>
         </View>
 
         <Pressable
-          onPress={() => navigation.navigate('Team')}
+          onPress={() => navigation.navigate("Team")}
           accessibilityRole="button"
-          accessibilityLabel="My team"
+          accessibilityLabel="Team"
           style={({ pressed }) => ({
             backgroundColor: primary.bg,
             borderRadius: radius.pill,
@@ -394,7 +441,9 @@ export default function BirthdayScreen() {
         {/* ── Your day ───────────────────────────────────────────────────── */}
         {mine ? (
           <View style={{ marginBottom: space.xxl }}>
-            <MyBirthdayHero name={me?.first_name?.trim() || fullNameOf(me).split(' ')[0]} />
+            <MyBirthdayHero
+              name={me?.first_name?.trim() || fullNameOf(me).split(" ")[0]}
+            />
           </View>
         ) : null}
 
@@ -423,7 +472,9 @@ export default function BirthdayScreen() {
             {today.length > 0 ? (
               <View style={{ marginBottom: space.xxl }}>
                 <Section label="Celebrating today" count={today.length} />
-                <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                <View
+                  style={{ paddingHorizontal: space.screen, gap: space.md }}
+                >
                   {today.map((p) => (
                     <TodayCard
                       key={p._id}
@@ -441,7 +492,9 @@ export default function BirthdayScreen() {
             {week.length > 0 ? (
               <View style={{ marginBottom: space.xxl }}>
                 <Section label="This week" count={week.length} />
-                <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                <View
+                  style={{ paddingHorizontal: space.screen, gap: space.md }}
+                >
                   {week.map((p) => (
                     <UpcomingRow key={p._id} person={p} />
                   ))}
@@ -454,7 +507,9 @@ export default function BirthdayScreen() {
                 {/* Just "Later" — a 30-day window spills into next month, and
                     a header that names the wrong month is worse than none. */}
                 <Section label="Later" count={later.length} />
-                <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                <View
+                  style={{ paddingHorizontal: space.screen, gap: space.md }}
+                >
                   {later.map((p) => (
                     <UpcomingRow key={p._id} person={p} />
                   ))}
@@ -478,7 +533,10 @@ export default function BirthdayScreen() {
         <View style={{ padding: space.screen }}>
           <View className="items-center">
             <Avatar user={personUser(wishing ?? {})} size={64} />
-            <Text style={{ color: c.text }} className={`mt-3 text-center ${T.cardTitle}`}>
+            <Text
+              style={{ color: c.text }}
+              className={`mt-3 text-center ${T.cardTitle}`}
+            >
               Wish {firstNameOf(wishing?.name)}
             </Text>
             {wishing?.designation ? (
@@ -510,7 +568,7 @@ export default function BirthdayScreen() {
                     backgroundColor: active ? primary.bg : c.fill,
                     borderRadius: radius.well,
                     borderWidth: 1,
-                    borderColor: active ? brand[600] : 'transparent',
+                    borderColor: active ? brand[600] : "transparent",
                     padding: space.md,
                     opacity: pressed ? 0.75 : 1,
                   })}

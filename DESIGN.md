@@ -304,7 +304,7 @@ reaching for Bold everywhere.
 | Body / input text | **15** | auto | UI Medium | `text` | Inputs, drawer rows |
 | Button label | **15** | auto | UI Semibold | per variant | Primary buttons |
 | Detail value | **15** | auto | UI Semibold | `text` | Clock in / out times |
-| FAB label | **14.5** | auto | UI Semibold | white | "Apply Leave" |
+| FAB label | **14.5** | auto | UI Semibold | white | "Leave" |
 | Body secondary | **14** | auto | UI Regular | `textMuted` | Greeting subtitle |
 | Card button label | **13.5** | auto | UI Semibold | white/brand700 | "Clock In" |
 | Field label | **13** | auto | UI Semibold | `textMuted` | "Leave type", "Email" |
@@ -622,6 +622,11 @@ reads as the control repositioning itself, which it is not.
 
 ### 6.16 ConfirmSheet
 
+`src/components/ConfirmSheet.tsx` — exports `ConfirmSheet`, plus `ConfirmStat` /
+`ConfirmDivider` for the detail well. **In use:** Leave → Withdraw request.
+PunchSheet's clock-out confirm is the same spec but stays inline: it is a *step*
+inside a sheet that is already open, not a second overlay on top of one.
+
 **One component for every "are you sure" in the app**, so a consequential tap always
 asks the same way. Built on BottomSheet (`maxHeightRatio 0.6`), never `Alert.alert` —
 the system dialog cannot carry the app's type, its accent or a busy state on the
@@ -712,6 +717,23 @@ never by tinting the whole card.
 | error | `#EF4444` | `#F87171` |
 | warning | `#F59E0B` | `#FBBF24` |
 | info | `#3B82F6` | `#60A5FA` |
+
+---
+
+### 6.19 RangeChip (header dropdown trigger)
+
+`ui.tsx`. The control that opens a picker sheet from a screen header — month, year,
+any short filter. Attendance and Leave both use it, so "tap the chip, pick from a
+sheet" is learned once.
+
+| Element | Spec |
+|---------|------|
+| Shape | **h 36**, radius pill, padding-x 12, row gap 4 |
+| Fill | `primary.bg` — tinted, never outlined: it shares its row with a title, and a bordered control there reads as an input the header does not have |
+| Label | `T.badge` in `brand/700`, 1 line, `allowFontScaling={false}` |
+| Affordance | ChevronDown **14** stroke 2.6 `brand/700` |
+| Pressed | opacity 0.75 |
+| a11y | Label must state the current value AND the verb — "Year 2026. Change year" |
 
 ---
 
@@ -911,7 +933,7 @@ a scrolling rail is exactly the right shape for a long tail.
 
 | # | Title | Icon | Tone | Destination |
 |---|-------|------|------|-------------|
-| 1 | Apply Leave | FileText | **danger** | LeaveApply |
+| 1 | Leave | FileText | **danger** | LeaveApply |
 | 2 | Payslip | Receipt | **purple** | *soon* |
 | 3 | Tickets | LifeBuoy | **info** | *soon* |
 | 4 | Calendar | CalendarDays | **success** | *soon* |
@@ -1082,24 +1104,45 @@ Start by clocking in."
 
 ### 7.4 Leave (`LeaveScreen`)
 
+Built to the SAME anatomy as Attendance — header + RangeChips, a rail of tiles, then
+a list of `radius.card − 4` cards with a 1px hairline and `shadow/soft`. The two
+screens are read one after the other, and until now they were laid out as if by two
+different people.
+
 | # | Block | Spec |
 |---|-------|------|
-| 1 | **Header** | Same geometry as Attendance. Title "My Leave" + year `brand/600`. Right: **40 × 40** circle (radius pill), fill `primary.bg`, Plus 20 stroke 2.4 `brand/600` |
-| 2 | **Balance strip** | Horizontal scroll of BalanceTiles, side padding 20, gap 12 |
-| 3 | **Year stepper** | Side padding 20, top padding 20, row gap 8. ChevronLeft 18 `textMuted` · year UI Semibold 15 `text` · ChevronRight 18 (hidden on the current year) |
-| 4 | **Month chips** | Same chip spec as Attendance; padding-y 12; "All" first; no future-disable |
-| 5 | **"Leave History"** | UI Semibold 16 `text`, side padding 20, margin-bottom 12 |
-| 6 | **Timeline** | Per row: left rail **22 px** wide — dot **14 × 14** circle, fill = status `tint`, **3px border in `bg`** (so it punches through the connector), margin-top 20; connector **1px** `border` running to the next row (omitted on the last). Card: margin-left 12, margin-bottom 12, fill `card`, radius 20, padding 16, `shadow/card` (light) |
-| 7 | **Timeline card contents** | Title row: leave type UI Semibold 15 (1 line, pr 8) + status Badge. Meta UI Regular 12.5 `textMuted` margin-top 4 — `12 Mar – 15 Mar · 4 days · half day`. Reason (2 lines) with faint "Reason: " prefix, margin-top 6. Admin note with "Admin: " prefix. **Withdraw** chip (pending only): margin-top 10, self-start, fill `fill`, radius pill, padding 12/6, X 12 stroke 2.4 + "Withdraw" UI Semibold 12, both `textMuted` |
-| 8 | **FAB** | Absolute, right 20, bottom = safe-area + 76. **h 52**, radius pill, fill `brand/600`, padding-x 20, `shadow/floating`. Plus 20 stroke 2.4 white + "Apply Leave" UI Semibold 14.5 white, gap 8. Pressed → scale 0.95 |
-| 9 | **Empty state** | ClipboardList 32 · "No leave in this period" · "Every request you apply for shows up here with its approval trail." · action "Apply for leave" |
-| 10 | **BottomNav** | active = `leaves`. Scroll bottom padding = safe-area + 76 + 72 (extra room for the FAB) |
+| 1 | **Header** | Padding-top = safe-area + 8, side 20, bottom 16, row gap 12. ChevronLeft 24 · title "My Leave" `T.section` (**18**, NOT 28 — it shares the row with controls) + caption `T.caption` `textMuted` = "`N` requests in `<period>`". Right: **RangeChip** month + **RangeChip** year (shared `ui.tsx` control, identical to Attendance) |
+| 2 | **"Leave Balance"** | SectionHeader (18 semibold, side 20, margin-bottom 12) |
+| 3 | **Balance strip** | Horizontal scroll of BalanceTiles, **w 168**, side padding 20, gap 12. Loading → 2 × Skeleton 118 × 168, radius 24 |
+| 4 | **"Requests"** | SectionHeader, preceded by 24 top padding |
+| 5 | **Status filter rail** | Horizontal scroll, side 20, gap 8, bottom padding 16. Chips: **h 36**, radius pill, padding-x 14, gap 6 — label `T.badge` + count `T.count`. Active = fill `brand/600`, white label + `rgba(255,255,255,0.75)` count. Inactive = fill `card` + 1px `border` (light only), `textMuted` label + `textFaint` count; **opacity 0.5 when its count is 0**. Order: All · Pending · Approved · Rejected · Cancelled |
+| 6 | **Month group label** | Only while the month filter is "All": `T.micro` uppercase `textFaint`, side padding 20. Groups newest-first, 20 between groups, 12 between cards |
+| 7 | **Request card** | Fill `card`, radius **20** (`card − 4`), 1px `border`, padding 16, `shadow/soft` (light) / none (dark). Head: date well **48 × 48** radius 14, fill = status `tone.bg` (light) / `fill` (dark), day 2-digit `T.cardTitle` + month `T.nano` in `tone.text` (light) / `text` (dark) · type `T.cardTitleSm` + span `T.micro` `textMuted` (`Mon, 12 Jul 2026` for one day, `12 Jul → 14 Jul 2026` for a range) · status Badge |
+| 8 | **Card facts strip** | Margin-top 12, fill `fill`, radius 12, padding 12 h / 10 v, gap 12, 1px × 28 dividers. Duration · Session (Half day / Full day) · Applied (omitted when the API sends no `createdAt`). Each: label `T.nano` `textMuted` + value `T.cardTitleSm` `text` |
+| 9 | **Reason** | Margin-top 12, FileText 13 `textFaint` + `T.secondary` `textMuted`, **3 lines** max |
+| 10 | **Reviewer note** | Margin-top 12, own block: fill = status `tone.bg` (light) / `fill` (dark), radius 12, padding 12. MessageSquareText 13 in `tone.tint` + reviewer name `T.nano` `tone.text` + note `T.secondary` `text`. Quoted separately so an admin's words never read as the employee's own reason |
+| 11 | **Withdraw** | Pending only. Margin-top 12, self-start, fill `fill`, radius pill, padding 12/6, X 13 stroke 2.6 + "Withdraw" `T.badge`, both `textMuted`. Spinner replaces the glyph while the mutation is in flight |
+| 12 | **Withdraw confirm** | `ConfirmSheet` (§6.16), tone **danger**, icon TriangleAlert. Title "Withdraw this request?" · message "This cancels the request for good. You can always apply again." · detail well = Type │ Dates │ Days · **No, keep it** / **Yes, withdraw**. The summary restates WHICH request, because the list scrolled out of view the moment the sheet came up |
+| 13 | **Month / year pickers** | Identical to Attendance §7.3 — 3-across month grid, year list with a Check on the active row |
+| 14 | **FAB** | Absolute, right 20, bottom = safe-area + 78. **h 52**, radius pill, fill `brand/600`, padding-x 20, `shadow/floating`. Plus 20 stroke 2.4 white + "Leave" UI Semibold 14.5 white, gap 8. Pressed → scale 0.95. **The only apply affordance on the screen** — the header's + button was removed |
+| 15 | **Error state** | TriangleAlert 32 · "Could not load your leave" · the API message · action "Try again" (refetches list + balance) |
+| 16 | **Empty state** | ClipboardList 32. Filter "All" → "No leave in this period" + action "Apply for leave"; any other filter → "Nothing `<status>` here" + action "Show all" |
+| 17 | **BottomNav** | active = `leaves`. Scroll bottom padding = safe-area + 78 + 76 (extra room for the FAB) |
+
+**Removed on purpose:** the timeline rail (22px of dotted line for a sequence the
+dates already state, and it pushed every card off the 20px grid the rest of the app
+sits on), the year stepper and the 13-chip month strip (both replaced by the two
+header RangeChips), and the header + button.
 
 **Leave status → tone:** Approved → success · Pending → warning · **Rejected → purple**
 (deliberately not red — red already means "absent" on the calendar, and a declined
 request is not an error) · Cancelled → neutral.
 
 **Type labels:** `sl` Sick Leave · `el` Annual Leave · `unpaid` Unpaid Leave.
+
+**Filtering is client-side.** `GET /leave/me` takes no date range, so year, month and
+status all filter the one cached list — a personal history is tens of rows, and
+filtering locally is what keeps every chip instant.
 
 ---
 

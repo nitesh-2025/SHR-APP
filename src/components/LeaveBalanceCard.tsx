@@ -1,10 +1,10 @@
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from "react-native";
 
-import { ProgressBar, Skeleton } from './ui';
-import { describeApiError } from '../lib/apiError';
-import { useGetMyBalanceQuery, type LeaveBucket } from '../store/leaveApi';
-import { radius, shadow, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
+import { ProgressBar, Skeleton } from "./ui";
+import { describeApiError } from "../lib/apiError";
+import { useGetMyBalanceQuery, type LeaveBucket } from "../store/leaveApi";
+import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
 
 /**
  * Remaining leave per bucket — `GET /leaves/me/balance`.
@@ -17,13 +17,13 @@ export function BalanceTile({
   bucket,
   tone,
   /** `filled` = solid accent with white type. Use it for the lead bucket only. */
-  variant = 'tint',
+  variant = "tint",
   width = 168,
 }: {
   label: string;
   bucket?: LeaveBucket;
   tone: Surface;
-  variant?: 'filled' | 'tint';
+  variant?: "filled" | "tint";
   width?: number;
 }) {
   const { c, dark } = useTheme();
@@ -32,16 +32,20 @@ export function BalanceTile({
   // Guard the divide: a bucket with nothing allocated reads as empty, not NaN.
   const pct = allocated > 0 ? available / allocated : 0;
 
-  const filled = variant === 'filled';
+  const filled = variant === "filled";
   // Dark mode drops the pastel fills — a tint that reads as "soft" on white
   // reads as "muddy" on a dark surface.
   const bg = filled ? tone.tint : dark ? c.card : tone.bg;
   // A tinted tile on a white-smoke canvas needs its own edge; the filled one
   // already has maximum contrast and a border would only muddy it.
-  const borderColor = filled ? 'transparent' : dark ? c.border : tone.border;
-  const labelColor = filled ? 'rgba(255,255,255,0.85)' : dark ? c.textMuted : tone.text;
-  const valueColor = filled ? '#FFFFFF' : c.text;
-  const subColor = filled ? 'rgba(255,255,255,0.75)' : c.textMuted;
+  const borderColor = filled ? "transparent" : dark ? c.border : tone.border;
+  const labelColor = filled
+    ? "rgba(255,255,255,0.85)"
+    : dark
+      ? c.textMuted
+      : tone.text;
+  const valueColor = filled ? "#FFFFFF" : c.text;
+  const subColor = filled ? "rgba(255,255,255,0.75)" : c.textMuted;
 
   return (
     <View
@@ -69,10 +73,16 @@ export function BalanceTile({
       </Text>
 
       <View className="mt-1.5 flex-row items-baseline">
-        <Text style={{ color: valueColor }} className="font-display text-[26px] leading-8">
+        <Text
+          style={{ color: valueColor }}
+          className="font-display text-[26px] leading-8"
+        >
           {available}
         </Text>
-        <Text style={{ color: subColor }} className="ml-1 font-ui-regular text-[13px]">
+        <Text
+          style={{ color: subColor }}
+          className="ml-1 font-ui-regular text-[13px]"
+        >
           / {allocated}
         </Text>
       </View>
@@ -86,9 +96,9 @@ export function BalanceTile({
       <View className="mt-3">
         <ProgressBar
           value={pct}
-          color={filled ? '#FFFFFF' : tone.tint}
+          color={filled ? "#FFFFFF" : tone.tint}
           height={5}
-          track={filled ? 'rgba(255,255,255,0.28)' : undefined}
+          track={filled ? "rgba(255,255,255,0.28)" : undefined}
         />
       </View>
     </View>
@@ -103,17 +113,25 @@ export function BalanceTile({
  * tile would render as a permanent 0 / 0. Add `cl` server-side and it appears
  * here on its own — no client change.
  */
-const BUCKETS: { key: string; label: string; tone?: Surface; variant?: 'filled' | 'tint' }[] = [
-  { key: 'el', label: 'Annual Leave', variant: 'filled' },
-  { key: 'sl', label: 'Sick Leave', tone: surface.purple },
-  { key: 'cl', label: 'Casual Leave', tone: surface.warning },
-  { key: 'ml', label: 'Maternity Leave', tone: surface.info },
+const BUCKETS: {
+  key: string;
+  label: string;
+  tone?: Surface;
+  variant?: "filled" | "tint";
+}[] = [
+  { key: "el", label: "Annual Leave", variant: "filled" },
+  { key: "sl", label: "Sick Leave", tone: surface.purple },
+  { key: "cl", label: "Casual Leave", tone: surface.warning },
+  { key: "ml", label: "Maternity Leave", tone: surface.info },
 ];
 
 /** Tiles for every bucket the server actually sent, in the order above. */
 export function useBalanceTiles(data: unknown) {
   const map = (data ?? {}) as Record<string, LeaveBucket | undefined>;
-  return BUCKETS.filter((b) => map[b.key]).map((b) => ({ ...b, bucket: map[b.key] }));
+  return BUCKETS.filter((b) => map[b.key]).map((b) => ({
+    ...b,
+    bucket: map[b.key],
+  }));
 }
 
 export function LeaveBalanceCard() {
@@ -123,7 +141,10 @@ export function LeaveBalanceCard() {
 
   if (isLoading) {
     return (
-      <View className="flex-row" style={{ paddingHorizontal: space.screen, gap: space.md }}>
+      <View
+        className="flex-row"
+        style={{ paddingHorizontal: space.screen, gap: space.md }}
+      >
         <Skeleton height={124} width={168} radius={radius.card} />
         <Skeleton height={124} width={168} radius={radius.card} />
       </View>
@@ -145,7 +166,13 @@ export function LeaveBalanceCard() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: space.screen, gap: space.md }}
+      contentContainerStyle={{
+        paddingHorizontal: space.screen,
+        gap: space.md,
+        borderRadius: 0,
+        paddingBottom: space.md,
+      }}
+      className="mt-3"
     >
       {tiles.map((t) => (
         <BalanceTile

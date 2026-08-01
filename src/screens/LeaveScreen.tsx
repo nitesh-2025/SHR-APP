@@ -1,4 +1,4 @@
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import {
   CalendarHeart,
   Check,
@@ -11,15 +11,26 @@ import {
   Repeat,
   TriangleAlert,
   X,
-} from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "lucide-react-native";
+import { useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BOTTOM_NAV_CLEARANCE, BottomNav } from '../components/BottomNav';
-import { BottomSheet } from '../components/BottomSheet';
-import { ConfirmDivider, ConfirmSheet, ConfirmStat } from '../components/ConfirmSheet';
-import { BalanceTile, useBalanceTiles } from '../components/LeaveBalanceCard';
+import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
+import { BottomSheet } from "../components/BottomSheet";
+import {
+  ConfirmDivider,
+  ConfirmSheet,
+  ConfirmStat,
+} from "../components/ConfirmSheet";
+import { BalanceTile, useBalanceTiles } from "../components/LeaveBalanceCard";
 import {
   Badge,
   EmptyState,
@@ -27,21 +38,21 @@ import {
   SectionHeader,
   Segmented,
   Skeleton,
-} from '../components/ui';
-import { describeApiError } from '../lib/apiError';
-import { toast } from '../lib/toast';
-import type { RootStackParamList } from '../navigation/RootNavigator';
+} from "../components/ui";
+import { describeApiError } from "../lib/apiError";
+import { toast } from "../lib/toast";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import {
   useCancelLeaveMutation,
   useGetMyBalanceQuery,
   useGetMyLeavesQuery,
   type Leave,
   type LeaveStatus,
-} from '../store/leaveApi';
-import { useGetHolidaysQuery, type Holiday } from '../store/workCalendarApi';
-import { radius, shadow, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
+} from "../store/leaveApi";
+import { useGetHolidaysQuery, type Holiday } from "../store/workCalendarApi";
+import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
 import {
   fmtDate,
   fmtDayShort,
@@ -51,39 +62,39 @@ import {
   weekdayOf,
   WEEKDAYS_LONG,
   ymd,
-} from '../utils/date';
+} from "../utils/date";
 
 const TYPE_LABEL: Record<string, string> = {
-  sl: 'Sick Leave',
-  el: 'Annual Leave',
-  unpaid: 'Unpaid Leave',
+  sl: "Sick Leave",
+  el: "Annual Leave",
+  unpaid: "Unpaid Leave",
 };
 
 // Rejected reads violet rather than red: red is already the calendar's
 // "absent", and a declined request is not an error state.
 const STATUS: Record<LeaveStatus, { label: string; tone: Surface }> = {
-  approved: { label: 'Approved', tone: surface.success },
-  pending: { label: 'Pending', tone: surface.warning },
-  rejected: { label: 'Rejected', tone: surface.purple },
-  cancelled: { label: 'Cancelled', tone: surface.neutral },
+  approved: { label: "Approved", tone: surface.success },
+  pending: { label: "Pending", tone: surface.warning },
+  rejected: { label: "Rejected", tone: surface.purple },
+  cancelled: { label: "Cancelled", tone: surface.neutral },
 };
 
 /** `all` is not a status — it is the absence of the filter. */
-type StatusFilter = 'all' | LeaveStatus;
+type StatusFilter = "all" | LeaveStatus;
 
-const FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'rejected', label: 'Rejected' },
-  { key: 'cancelled', label: 'Cancelled' },
+const FILTERS: { key: StatusFilter; label: string; color: string }[] = [
+  { key: "all", label: "All", color: surface.neutral.bg },
+  { key: "pending", label: "Pending", color: surface.warning.bg },
+  { key: "approved", label: "Approved", color: surface.success.bg },
+  { key: "rejected", label: "Rejected", color: surface.purple.bg },
+  { key: "cancelled", label: "Cancelled", color: surface.neutral.bg },
 ];
 
 /** Years offered in the picker, newest first. */
 const YEAR_SPAN = 4;
 
 /** The two halves of "leave": what YOU asked for, and what the COMPANY gives. */
-type Tab = 'requests' | 'holidays';
+type Tab = "requests" | "holidays";
 
 const TILE_WIDTH = 168;
 
@@ -107,7 +118,10 @@ interface HolidayDate {
  * date and is dropped unless it falls in that year — otherwise stepping to 2025
  * would still list a 2026-only holiday.
  */
-function resolveHolidays(list: Holiday[] | undefined, year: number): HolidayDate[] {
+function resolveHolidays(
+  list: Holiday[] | undefined,
+  year: number,
+): HolidayDate[] {
   const out: HolidayDate[] = [];
 
   for (const h of list ?? []) {
@@ -127,7 +141,13 @@ function resolveHolidays(list: Holiday[] | undefined, year: number): HolidayDate
     }
 
     if (!date || Number.isNaN(date.getTime())) continue;
-    out.push({ id: h._id, name: h.name, recurring: h.recurring, date, key: ymd(date) });
+    out.push({
+      id: h._id,
+      name: h.name,
+      recurring: h.recurring,
+      date,
+      key: ymd(date),
+    });
   }
 
   return out.sort((a, b) => a.key.localeCompare(b.key));
@@ -141,7 +161,13 @@ function daysAway(key: string, todayKey: string): number {
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
-function HolidayCard({ item, todayKey }: { item: HolidayDate; todayKey: string }) {
+function HolidayCard({
+  item,
+  todayKey,
+}: {
+  item: HolidayDate;
+  todayKey: string;
+}) {
   const { c, dark } = useTheme();
 
   const away = daysAway(item.key, todayKey);
@@ -150,7 +176,11 @@ function HolidayCard({ item, todayKey }: { item: HolidayDate; todayKey: string }
 
   // Today is a success state, anything ahead is informational, anything behind
   // steps back to neutral — a past holiday is history, not news.
-  const tone = isToday ? surface.success : passed ? surface.neutral : surface.info;
+  const tone = isToday
+    ? surface.success
+    : passed
+      ? surface.neutral
+      : surface.info;
 
   const wellBg = dark ? c.fill : tone.bg;
   const wellInk = dark ? c.text : tone.text;
@@ -172,20 +202,36 @@ function HolidayCard({ item, todayKey }: { item: HolidayDate; todayKey: string }
         style={{ backgroundColor: wellBg, borderRadius: radius.well - 2 }}
         className="h-12 w-12 items-center justify-center"
       >
-        <Text style={{ color: wellInk }} className={T.cardTitle} allowFontScaling={false}>
-          {String(item.date.getDate()).padStart(2, '0')}
+        <Text
+          style={{ color: wellInk }}
+          className={T.cardTitle}
+          allowFontScaling={false}
+        >
+          {String(item.date.getDate()).padStart(2, "0")}
         </Text>
-        <Text style={{ color: wellInk }} className={T.nano} allowFontScaling={false}>
+        <Text
+          style={{ color: wellInk }}
+          className={T.nano}
+          allowFontScaling={false}
+        >
           {MONTHS[item.date.getMonth()]}
         </Text>
       </View>
 
       <View className="flex-1">
-        <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+        <Text
+          style={{ color: c.text }}
+          className={T.cardTitleSm}
+          numberOfLines={1}
+        >
           {item.name}
         </Text>
         <View className="mt-0.5 flex-row items-center gap-1.5">
-          <Text style={{ color: c.textMuted }} className={T.micro} numberOfLines={1}>
+          <Text
+            style={{ color: c.textMuted }}
+            className={T.micro}
+            numberOfLines={1}
+          >
             {WEEKDAYS_LONG[item.date.getDay()]}
           </Text>
           {/* A recurring holiday falls on the same date every year; a one-off
@@ -209,7 +255,13 @@ function HolidayCard({ item, todayKey }: { item: HolidayDate; todayKey: string }
         <Badge
           label="Today"
           tone={surface.success}
-          icon={<PartyPopper size={11} strokeWidth={2.6} color={surface.success.tint} />}
+          icon={
+            <PartyPopper
+              size={11}
+              strokeWidth={2.6}
+              color={surface.success.tint}
+            />
+          }
         />
       ) : (
         <Text
@@ -217,7 +269,7 @@ function HolidayCard({ item, todayKey }: { item: HolidayDate; todayKey: string }
           className={T.micro}
           allowFontScaling={false}
         >
-          {passed ? 'Passed' : away === 1 ? 'Tomorrow' : `in ${away} days`}
+          {passed ? "Passed" : away === 1 ? "Tomorrow" : `in ${away} days`}
         </Text>
       )}
     </View>
@@ -238,11 +290,13 @@ function FilterChip({
   label,
   count,
   active,
+  btnColor,
   onPress,
 }: {
   label: string;
   count: number;
   active: boolean;
+  btnColor: string;
   onPress: () => void;
 }) {
   const { c, brand, dark } = useTheme();
@@ -264,14 +318,14 @@ function FilterChip({
       className="h-9 flex-row items-center gap-1.5 px-3.5"
     >
       <Text
-        style={{ color: active ? '#FFFFFF' : c.textMuted }}
+        style={{ color: btnColor }}
         className={T.badge}
         allowFontScaling={false}
       >
         {label}
       </Text>
       <Text
-        style={{ color: active ? 'rgba(255,255,255,0.75)' : c.textFaint }}
+        style={{ color: active ? "rgba(255,255,255,0.75)" : c.textFaint }}
         className={T.count}
         allowFontScaling={false}
       >
@@ -362,16 +416,28 @@ function LeaveCard({
           style={{ backgroundColor: wellBg, borderRadius: radius.well - 2 }}
           className="h-12 w-12 items-center justify-center"
         >
-          <Text style={{ color: wellInk }} className={T.cardTitle} allowFontScaling={false}>
-            {from ? String(from.getDate()).padStart(2, '0') : '--'}
+          <Text
+            style={{ color: wellInk }}
+            className={T.cardTitle}
+            allowFontScaling={false}
+          >
+            {from ? String(from.getDate()).padStart(2, "0") : "--"}
           </Text>
-          <Text style={{ color: wellInk }} className={T.nano} allowFontScaling={false}>
-            {from ? MONTHS[from.getMonth()] : ''}
+          <Text
+            style={{ color: wellInk }}
+            className={T.nano}
+            allowFontScaling={false}
+          >
+            {from ? MONTHS[from.getMonth()] : ""}
           </Text>
         </View>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.cardTitleSm}
+            numberOfLines={1}
+          >
             {TYPE_LABEL[leave.type] ?? leave.type}
           </Text>
           <Text
@@ -399,9 +465,15 @@ function LeaveCard({
         }}
         className="mt-3 flex-row items-center gap-3"
       >
-        <Fact label="Duration" value={`${leave.days} ${leave.days === 1 ? 'day' : 'days'}`} />
+        <Fact
+          label="Duration"
+          value={`${leave.days} ${leave.days === 1 ? "day" : "days"}`}
+        />
         <Rule />
-        <Fact label="Session" value={leave.half_day ? 'Half day' : 'Full day'} />
+        <Fact
+          label="Session"
+          value={leave.half_day ? "Half day" : "Full day"}
+        />
         {leave.createdAt ? (
           <>
             <Rule />
@@ -415,8 +487,17 @@ function LeaveCard({
           essay belongs on the request itself, not in every row of history. */}
       {leave.reason ? (
         <View className="mt-3 flex-row gap-2">
-          <FileText size={13} strokeWidth={2} color={c.textFaint} style={{ marginTop: 2 }} />
-          <Text style={{ color: c.textMuted }} className={`flex-1 ${T.secondary}`} numberOfLines={3}>
+          <FileText
+            size={13}
+            strokeWidth={2}
+            color={c.textFaint}
+            style={{ marginTop: 2 }}
+          />
+          <Text
+            style={{ color: c.textMuted }}
+            className={`flex-1 ${T.secondary}`}
+            numberOfLines={3}
+          >
             {leave.reason}
           </Text>
         </View>
@@ -441,8 +522,11 @@ function LeaveCard({
             style={{ marginTop: 2 }}
           />
           <View className="flex-1">
-            <Text style={{ color: dark ? c.textMuted : status.tone.text }} className={T.nano}>
-              {leave.reviewer_name || 'Reviewer'}
+            <Text
+              style={{ color: dark ? c.textMuted : status.tone.text }}
+              className={T.nano}
+            >
+              {leave.reviewer_name || "Reviewer"}
             </Text>
             <Text style={{ color: c.text }} className={`mt-0.5 ${T.secondary}`}>
               {leave.review_note}
@@ -497,11 +581,11 @@ export default function LeaveScreen() {
 
   const today = new Date();
   const todayKey = ymd(today);
-  const [tab, setTab] = useState<Tab>('requests');
+  const [tab, setTab] = useState<Tab>("requests");
   const [year, setYear] = useState(today.getFullYear());
   /** `null` = the whole year. History is sparse, so it opens wide. */
   const [month, setMonth] = useState<number | null>(null);
-  const [status, setStatus] = useState<StatusFilter>('all');
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   const [monthOpen, setMonthOpen] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
@@ -509,7 +593,9 @@ export default function LeaveScreen() {
   const [confirm, setConfirm] = useState<Leave | null>(null);
 
   const balance = useGetMyBalanceQuery();
-  const { data, isLoading, isFetching, error, refetch } = useGetMyLeavesQuery({ limit: 100 });
+  const { data, isLoading, isFetching, error, refetch } = useGetMyLeavesQuery({
+    limit: 100,
+  });
   const [cancelLeave, { isLoading: cancelling }] = useCancelLeaveMutation();
   const tiles = useBalanceTiles(balance.data);
 
@@ -542,7 +628,8 @@ export default function LeaveScreen() {
   }, [inPeriod]);
 
   const items = useMemo(
-    () => (status === 'all' ? inPeriod : inPeriod.filter((l) => l.status === status)),
+    () =>
+      status === "all" ? inPeriod : inPeriod.filter((l) => l.status === status),
     [inPeriod, status],
   );
 
@@ -568,7 +655,9 @@ export default function LeaveScreen() {
   /** This year's holidays, narrowed by the same month chip the requests use. */
   const holidayList = useMemo(() => {
     const all = resolveHolidays(holidays.data, year);
-    return month === null ? all : all.filter((h) => h.date.getMonth() === month);
+    return month === null
+      ? all
+      : all.filter((h) => h.date.getMonth() === month);
   }, [holidays.data, year, month]);
 
   const upcoming = useMemo(
@@ -580,19 +669,23 @@ export default function LeaveScreen() {
     [holidayList, todayKey],
   );
 
-  const years = Array.from({ length: YEAR_SPAN }, (_, i) => today.getFullYear() - i);
+  const years = Array.from(
+    { length: YEAR_SPAN },
+    (_, i) => today.getFullYear() - i,
+  );
 
   const withdraw = async (leave: Leave) => {
     try {
       await cancelLeave(leave._id).unwrap();
       setConfirm(null);
-      toast.success('Leave request withdrawn');
+      toast.success("Leave request withdrawn");
     } catch (e) {
       toast.error(describeApiError(e).title);
     }
   };
 
-  const period = month === null ? String(year) : `${MONTHS_LONG[month]} ${year}`;
+  const period =
+    month === null ? String(year) : `${MONTHS_LONG[month]} ${year}`;
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
@@ -619,23 +712,20 @@ export default function LeaveScreen() {
         </Pressable>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.section} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.section}
+            numberOfLines={1}
+          >
             My Leave
-          </Text>
-          <Text style={{ color: c.textMuted }} className={T.caption} numberOfLines={1}>
-            {tab === 'requests'
-              ? `${inPeriod.length} ${inPeriod.length === 1 ? 'request' : 'requests'} in ${period}`
-              : `${holidayList.length} ${
-                  holidayList.length === 1 ? 'holiday' : 'holidays'
-                } in ${period}`}
           </Text>
         </View>
 
         {/* Month left of year — narrowing reads outer-to-inner. */}
         <View className="flex-row items-center gap-2">
           <RangeChip
-            label={month === null ? 'All' : MONTHS[month]}
-            a11y={`Month ${month === null ? 'all' : MONTHS_LONG[month]}. Change month`}
+            label={month === null ? "All" : MONTHS[month]}
+            a11y={`Month ${month === null ? "all" : MONTHS_LONG[month]}. Change month`}
             onPress={() => setMonthOpen(true)}
           />
           <RangeChip
@@ -651,11 +741,13 @@ export default function LeaveScreen() {
           "Holidays" is what the company already closed — days you never have
           to ask for. They were two different screens' worth of question stuck
           on one list before. */}
-      <View style={{ paddingHorizontal: space.screen, paddingBottom: space.lg }}>
+      <View
+        style={{ paddingHorizontal: space.screen, paddingBottom: space.lg }}
+      >
         <Segmented<Tab>
           segments={[
-            { key: 'requests', label: 'Requested', count: inPeriod.length },
-            { key: 'holidays', label: 'Holidays', count: holidayList.length },
+            { key: "requests", label: "Requested", count: inPeriod.length },
+            { key: "holidays", label: "Holidays", count: holidayList.length },
           ]}
           value={tab}
           onChange={setTab}
@@ -663,17 +755,19 @@ export default function LeaveScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 76 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 76,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={
-              tab === 'requests'
+              tab === "requests"
                 ? isFetching && !isLoading
                 : holidays.isFetching && !holidays.isLoading
             }
             onRefresh={() => {
-              if (tab === 'requests') {
+              if (tab === "requests") {
                 refetch();
                 balance.refetch();
               } else {
@@ -684,7 +778,7 @@ export default function LeaveScreen() {
           />
         }
       >
-        {tab === 'holidays' ? (
+        {tab === "holidays" ? (
           /* ── Holidays ─────────────────────────────────────────────────
              Upcoming first, then what has already gone by — the question on
              this tab is "when is the next day off", not "what happened in
@@ -698,7 +792,13 @@ export default function LeaveScreen() {
               </View>
             ) : holidays.error ? (
               <EmptyState
-                icon={<TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />}
+                icon={
+                  <TriangleAlert
+                    size={32}
+                    strokeWidth={1.6}
+                    color={brand[600]}
+                  />
+                }
                 title="Could not load the holiday list"
                 message={describeApiError(holidays.error).title}
                 actionLabel="Try again"
@@ -706,10 +806,16 @@ export default function LeaveScreen() {
               />
             ) : holidayList.length === 0 ? (
               <EmptyState
-                icon={<CalendarHeart size={32} strokeWidth={1.6} color={brand[600]} />}
+                icon={
+                  <CalendarHeart
+                    size={32}
+                    strokeWidth={1.6}
+                    color={brand[600]}
+                  />
+                }
                 title="No holidays in this period"
                 message={`The company calendar has nothing marked for ${period}. Try another month or year.`}
-                actionLabel={month === null ? undefined : 'Show the whole year'}
+                actionLabel={month === null ? undefined : "Show the whole year"}
                 onAction={month === null ? undefined : () => setMonth(null)}
               />
             ) : (
@@ -717,14 +823,23 @@ export default function LeaveScreen() {
                 {upcoming.length > 0 ? (
                   <View style={{ gap: space.md }}>
                     <Text
-                      style={{ color: c.textFaint, paddingHorizontal: space.screen }}
+                      style={{
+                        color: c.textFaint,
+                        paddingHorizontal: space.screen,
+                      }}
                       className={`uppercase ${T.micro}`}
                     >
                       Coming up
                     </Text>
-                    <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                    <View
+                      style={{ paddingHorizontal: space.screen, gap: space.md }}
+                    >
                       {upcoming.map((h) => (
-                        <HolidayCard key={h.id + h.key} item={h} todayKey={todayKey} />
+                        <HolidayCard
+                          key={h.id + h.key}
+                          item={h}
+                          todayKey={todayKey}
+                        />
                       ))}
                     </View>
                   </View>
@@ -733,14 +848,23 @@ export default function LeaveScreen() {
                 {passed.length > 0 ? (
                   <View style={{ gap: space.md }}>
                     <Text
-                      style={{ color: c.textFaint, paddingHorizontal: space.screen }}
+                      style={{
+                        color: c.textFaint,
+                        paddingHorizontal: space.screen,
+                      }}
                       className={`uppercase ${T.micro}`}
                     >
                       Already passed
                     </Text>
-                    <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                    <View
+                      style={{ paddingHorizontal: space.screen, gap: space.md }}
+                    >
                       {passed.map((h) => (
-                        <HolidayCard key={h.id + h.key} item={h} todayKey={todayKey} />
+                        <HolidayCard
+                          key={h.id + h.key}
+                          item={h}
+                          todayKey={todayKey}
+                        />
                       ))}
                     </View>
                   </View>
@@ -750,120 +874,157 @@ export default function LeaveScreen() {
           </>
         ) : (
           <>
-        {/* ── Balance ────────────────────────────────────────────────────── */}
-        <SectionHeader title="Leave Balance" />
+            {/* ── Balance ────────────────────────────────────────────────────── */}
+            <SectionHeader title="Leave Balance" />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: space.screen, gap: space.md }}
-        >
-          {balance.isLoading ? (
-            <>
-              <Skeleton height={118} width={TILE_WIDTH} radius={radius.card} />
-              <Skeleton height={118} width={TILE_WIDTH} radius={radius.card} />
-            </>
-          ) : (
-            tiles.map((t) => (
-              <BalanceTile
-                key={t.key}
-                label={t.label}
-                bucket={t.bucket}
-                tone={t.tone ?? primary}
-                variant={t.variant}
-                width={TILE_WIDTH}
-              />
-            ))
-          )}
-        </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: space.screen,
+                gap: space.md,
+              }}
+            >
+              {balance.isLoading ? (
+                <>
+                  <Skeleton
+                    height={118}
+                    width={TILE_WIDTH}
+                    radius={radius.card}
+                  />
+                  <Skeleton
+                    height={118}
+                    width={TILE_WIDTH}
+                    radius={radius.card}
+                  />
+                </>
+              ) : (
+                tiles.map((t) => (
+                  <BalanceTile
+                    key={t.key}
+                    label={t.label}
+                    bucket={t.bucket}
+                    tone={t.tone ?? primary}
+                    variant={t.variant}
+                    width={TILE_WIDTH}
+                  />
+                ))
+              )}
+            </ScrollView>
 
-        {/* ── History ────────────────────────────────────────────────────── */}
-        <View style={{ paddingTop: space.xxl }}>
-          <SectionHeader title="Requests" />
-        </View>
+            {/* ── History ────────────────────────────────────────────────────── */}
+            <View style={{ paddingTop: space.xxl }}>
+              <SectionHeader title="Requests" />
+            </View>
 
-        {/* A rail, not a wrapped row: five statuses at 360dp would break onto a
+            {/* A rail, not a wrapped row: five statuses at 360dp would break onto a
             second line and push the list a chip-height further down. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: space.screen,
-            gap: space.sm,
-            paddingBottom: space.lg,
-          }}
-        >
-          {FILTERS.map((f) => (
-            <FilterChip
-              key={f.key}
-              label={f.label}
-              count={counts[f.key] ?? 0}
-              active={status === f.key}
-              onPress={() => setStatus(f.key)}
-            />
-          ))}
-        </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: space.screen,
+                gap: space.sm,
+                paddingBottom: space.lg,
+              }}
+            >
+              {FILTERS.map((f) => (
+                <FilterChip
+                  key={f.key}
+                  label={f.label}
+                  count={counts[f.key] ?? 0}
+                  active={status === f.key}
+                  btnColor={f.color}
+                  onPress={() => setStatus(f.key)}
+                />
+              ))}
+            </ScrollView>
 
-        {isLoading ? (
-          <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-            <Skeleton height={150} radius={radius.card - 4} />
-            <Skeleton height={150} radius={radius.card - 4} />
-            <Skeleton height={150} radius={radius.card - 4} />
-          </View>
-        ) : error ? (
-          <EmptyState
-            icon={<TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />}
-            title="Could not load your leave"
-            message={describeApiError(error).title}
-            actionLabel="Try again"
-            onAction={() => {
-              refetch();
-              balance.refetch();
-            }}
-          />
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList size={32} strokeWidth={1.6} color={brand[600]} />}
-            title={status === 'all' ? 'No leave in this period' : `Nothing ${status} here`}
-            message={
-              status === 'all'
-                ? `Every request you apply for in ${period} shows up here with its approval trail.`
-                : `No ${status} requests in ${period}. Try another status or period.`
-            }
-            actionLabel={status === 'all' ? 'Apply for leave' : 'Show all'}
-            onAction={
-              status === 'all' ? () => navigation.navigate('LeaveApply') : () => setStatus('all')
-            }
-          />
-        ) : (
-          <View style={{ gap: space.xl }}>
-            {groups.map((g) => (
-              <View key={g.key} style={{ gap: space.md }}>
-                {g.key >= 0 ? (
-                  <Text
-                    style={{ color: c.textFaint, paddingHorizontal: space.screen }}
-                    className={`uppercase ${T.micro}`}
-                  >
-                    {MONTHS_LONG[g.key]}
-                  </Text>
-                ) : null}
-
-                <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-                  {g.items.map((l) => (
-                    <LeaveCard
-                      key={l._id}
-                      leave={l}
-                      busy={cancelling && confirm?._id === l._id}
-                      onWithdraw={
-                        l.status === 'pending' ? () => setConfirm(l) : undefined
-                      }
-                    />
-                  ))}
-                </View>
+            {isLoading ? (
+              <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                <Skeleton height={150} radius={radius.card - 4} />
+                <Skeleton height={150} radius={radius.card - 4} />
+                <Skeleton height={150} radius={radius.card - 4} />
               </View>
-            ))}
-          </View>
-        )}
+            ) : error ? (
+              <EmptyState
+                icon={
+                  <TriangleAlert
+                    size={32}
+                    strokeWidth={1.6}
+                    color={brand[600]}
+                  />
+                }
+                title="Could not load your leave"
+                message={describeApiError(error).title}
+                actionLabel="Try again"
+                onAction={() => {
+                  refetch();
+                  balance.refetch();
+                }}
+              />
+            ) : items.length === 0 ? (
+              <EmptyState
+                icon={
+                  <ClipboardList
+                    size={32}
+                    strokeWidth={1.6}
+                    color={brand[600]}
+                  />
+                }
+                title={
+                  status === "all"
+                    ? "No leave in this period"
+                    : `Nothing ${status} here`
+                }
+                message={
+                  status === "all"
+                    ? `Every request you apply for in ${period} shows up here with its approval trail.`
+                    : `No ${status} requests in ${period}. Try another status or period.`
+                }
+                actionLabel={status === "all" ? "Apply for leave" : "Show all"}
+                onAction={
+                  status === "all"
+                    ? () => navigation.navigate("LeaveApply")
+                    : () => setStatus("all")
+                }
+              />
+            ) : (
+              <View style={{ gap: space.xl }}>
+                {groups.map((g) => (
+                  <View key={g.key} style={{ gap: space.md }}>
+                    {g.key >= 0 ? (
+                      <Text
+                        style={{
+                          color: c.textFaint,
+                          paddingHorizontal: space.screen,
+                        }}
+                        className={`uppercase ${T.micro}`}
+                      >
+                        {MONTHS_LONG[g.key]}
+                      </Text>
+                    ) : null}
+
+                    <View
+                      style={{ paddingHorizontal: space.screen, gap: space.md }}
+                    >
+                      {g.items.map((l) => (
+                        <LeaveCard
+                          key={l._id}
+                          leave={l}
+                          busy={cancelling && confirm?._id === l._id}
+                          onWithdraw={
+                            l.status === "pending"
+                              ? () => setConfirm(l)
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -872,11 +1033,11 @@ export default function LeaveScreen() {
           A header + button, a FAB and a nav slot were three ways to reach one
           form. */}
       <Pressable
-        onPress={() => navigation.navigate('LeaveApply')}
+        onPress={() => navigation.navigate("LeaveApply")}
         accessibilityRole="button"
         accessibilityLabel="Apply for leave"
         style={({ pressed }) => ({
-          position: 'absolute',
+          position: "absolute",
           right: space.screen,
           bottom: insets.bottom + BOTTOM_NAV_CLEARANCE,
           height: 52,
@@ -888,16 +1049,16 @@ export default function LeaveScreen() {
         className="flex-row items-center gap-2 px-5"
       >
         <Plus size={20} strokeWidth={2.4} color="#FFFFFF" />
-        <Text className="font-ui-semibold text-[14.5px] text-white">Apply Leave</Text>
+        <Text className="font-ui-semibold text-[14.5px] text-white">Leave</Text>
       </Pressable>
 
       <BottomNav
         active="leaves"
         onSelect={(key) => {
-          if (key === 'home') navigation.navigate('Dashboard');
-          else if (key === 'attendance') navigation.navigate('Attendance');
-          else if (key === 'apply') navigation.navigate('LeaveApply');
-          else if (key === 'profile') navigation.navigate('Profile');
+          if (key === "home") navigation.navigate("Dashboard");
+          else if (key === "attendance") navigation.navigate("Attendance");
+          else if (key === "apply") navigation.navigate("LeaveApply");
+          else if (key === "profile") navigation.navigate("Profile");
         }}
       />
 
@@ -920,7 +1081,10 @@ export default function LeaveScreen() {
         detail={
           confirm ? (
             <>
-              <ConfirmStat label="Type" value={TYPE_LABEL[confirm.type] ?? confirm.type} />
+              <ConfirmStat
+                label="Type"
+                value={TYPE_LABEL[confirm.type] ?? confirm.type}
+              />
               <ConfirmDivider />
               <ConfirmStat
                 label="Dates"
@@ -933,7 +1097,7 @@ export default function LeaveScreen() {
               <ConfirmDivider />
               <ConfirmStat
                 label="Days"
-                value={`${confirm.days} ${confirm.days === 1 ? 'day' : 'days'}`}
+                value={`${confirm.days} ${confirm.days === 1 ? "day" : "days"}`}
               />
             </>
           ) : null
@@ -943,7 +1107,11 @@ export default function LeaveScreen() {
       {/* ── Month picker ─────────────────────────────────────────────────
           A 3-across grid, not a strip of thirteen chips to scroll past: twelve
           months are a shape everyone already knows. */}
-      <BottomSheet visible={monthOpen} onClose={() => setMonthOpen(false)} maxHeightRatio={0.62}>
+      <BottomSheet
+        visible={monthOpen}
+        onClose={() => setMonthOpen(false)}
+        maxHeightRatio={0.62}
+      >
         <View style={{ padding: space.screen }}>
           <Text style={{ color: c.text }} className={T.section}>
             Filter by month
@@ -952,7 +1120,7 @@ export default function LeaveScreen() {
           <View className="mt-3 flex-row flex-wrap" style={{ gap: space.sm }}>
             {[null, ...MONTHS.map((_, i) => i)].map((m) => {
               const active = m === month;
-              const label = m === null ? 'All' : MONTHS[m];
+              const label = m === null ? "All" : MONTHS[m];
 
               return (
                 <Pressable
@@ -964,11 +1132,11 @@ export default function LeaveScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   style={({ pressed }) => ({
-                    width: '31%',
+                    width: "31%",
                     backgroundColor: active ? primary.bg : c.fill,
                     borderRadius: radius.well,
                     borderWidth: 1,
-                    borderColor: active ? brand[600] : 'transparent',
+                    borderColor: active ? brand[600] : "transparent",
                     opacity: pressed ? 0.7 : 1,
                   })}
                   className="items-center py-3.5"
@@ -987,7 +1155,11 @@ export default function LeaveScreen() {
       </BottomSheet>
 
       {/* ── Year picker ──────────────────────────────────────────────────── */}
-      <BottomSheet visible={yearOpen} onClose={() => setYearOpen(false)} maxHeightRatio={0.5}>
+      <BottomSheet
+        visible={yearOpen}
+        onClose={() => setYearOpen(false)}
+        maxHeightRatio={0.5}
+      >
         <View style={{ padding: space.screen, gap: space.sm }}>
           <Text style={{ color: c.text }} className={T.section}>
             Select year
@@ -1010,10 +1182,15 @@ export default function LeaveScreen() {
                 })}
                 className="h-12 flex-row items-center justify-between px-4"
               >
-                <Text style={{ color: active ? brand[700] : c.text }} className={T.cardTitleSm}>
+                <Text
+                  style={{ color: active ? brand[700] : c.text }}
+                  className={T.cardTitleSm}
+                >
                   {y}
                 </Text>
-                {active ? <Check size={18} strokeWidth={2.6} color={brand[700]} /> : null}
+                {active ? (
+                  <Check size={18} strokeWidth={2.6} color={brand[700]} />
+                ) : null}
               </Pressable>
             );
           })}

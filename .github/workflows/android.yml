@@ -1,0 +1,143 @@
+# Builds an installable Android release APK on GitHub's runners.
+#
+# No EAS, no paid service, nothing installed on your machine. The native
+# `android/` folder is gitignored (this is a CNG / prebuild project), so the
+# workflow regenerates it from `app.json` on every run.
+#
+# The APK is signed with the debug keystore React Native's template wires into
+# the `release` buildType. That is installable on any phone, but it is NOT a
+# Play Store upload — that needs a real keystore (see the note at the bottom).
+
+name: Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+# A second push should cancel the build the first one started — a queue of
+# stale APKs helps nobody.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # Which lockfile is present decides the package manager — no guessing,
+      # and no `npm ci` on a Yarn project.
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "name=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "name=yarn" >> "$GITHUB_OUTPUT"
+            echo "install=yarn install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=npm" >> "$GITHUB_OUTPUT"
+            echo "install=npm ci" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up pnpm
+        if: steps.pm.outputs.name == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          # Caches the module store for whichever manager was detected.
+          cache: ${{ steps.pm.outputs.name }}
+
+      - name: Install dependencies
+        run: ${{ steps.pm.outputs.install }}
+
+      # Expo inlines EXPO_PUBLIC_* at BUNDLE time, and `.env` is gitignored, so
+      # without this step the APK ships with an empty API base URL and every
+      # request fails. Set repository variables (Settings → Secrets and
+      # variables → Actions → Variables) to override any of these.
+      - name: Write .env
+        run: |
+          {
+            echo "EXPO_PUBLIC_BASE_URL=${{ vars.EXPO_PUBLIC_BASE_URL || 'https://node-stocklogy-backend.onrender.com' }}"
+            echo "EXPO_PUBLIC_APP_SOURCE=${{ vars.EXPO_PUBLIC_APP_SOURCE || 'STAFFCORE' }}"
+            echo "EXPO_PUBLIC_LONG_BREAK_MIN=${{ vars.EXPO_PUBLIC_LONG_BREAK_MIN || '50' }}"
+            echo "EXPO_PUBLIC_TERMS_URL=${{ vars.EXPO_PUBLIC_TERMS_URL || '' }}"
+          } > .env
+          echo "Wrote .env with base URL: ${{ vars.EXPO_PUBLIC_BASE_URL || 'https://node-stocklogy-backend.onrender.com' }}"
+
+      # Gradle needs 17 for React Native 0.76+. The runner already ships the
+      # Android SDK, so there is nothing else to install.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # Only when it is missing: a committed `android/` folder is the source of
+      # truth and must never be overwritten by a regenerated one.
+      - name: Generate the native project
+        run: |
+          if [ -d android ]; then
+            echo "android/ is committed — skipping prebuild."
+          else
+            npx expo prebuild --platform android --no-install
+          fi
+
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          # --no-daemon: the runner is thrown away anyway, and a daemon only
+          # adds memory pressure. --stacktrace: full Gradle output on failure,
+          # nothing suppressed.
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload the APK
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Shown on the run's summary page, so the result is readable without
+      # opening a single log.
+      - name: Build summary
+        if: always()
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          {
+            echo "## Android build"
+            echo ""
+            echo "- **Status:** ${{ job.status }}"
+            echo "- **Commit:** \`${GITHUB_SHA::7}\`"
+            if [ -f "$APK" ]; then
+              echo "- **APK:** \`$APK\`"
+              echo "- **Size:** $(du -h "$APK" | cut -f1)"
+              echo ""
+              echo "Download it from the **Artifacts** section of this run (\`release-apk\`)."
+            else
+              echo "- **APK:** not produced — see the failing step's log above."
+            fi
+            echo ""
+            echo "> Signed with the debug keystore, which is what React Native's"
+            echo "> template wires into the release buildType. Installable on any"
+            echo "> device; for the Play Store, add a real keystore and point the"
+            echo "> release signingConfig at it."
+          } >> "$GITHUB_STEP_SUMMARY"

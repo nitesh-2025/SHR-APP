@@ -23,7 +23,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SHR uses your photos so you can send them in a chat.",
+          "cameraPermission": "SHR uses the camera so you can send a photo in a chat."
+        }
+      ]
     ]
   }
 }

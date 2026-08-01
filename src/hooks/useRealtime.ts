@@ -5,7 +5,32 @@ import { chatApi, type Message } from "../store/chatApi";
 import { notificationApi } from "../store/notificationApi";
 import { rolesApi } from "../store/rolesApi";
 import { connectSocket, disconnectSocket } from "../store/socket";
-import { setOnlineList, userOnline, userOffline, resetPresence } from "../store/presenceSlice";
+import {
+  setOnlineList,
+  userOnline,
+  userOffline,
+  userTyping,
+  userStoppedTyping,
+  resetPresence,
+} from "../store/presenceSlice";
+
+/**
+ * The typing relay, as the backend actually speaks it.
+ *
+ * ONE event carrying a boolean — `{ from, typing: true | false }` — not a
+ * start/stop pair. Confirmed off the wire (`socket.onAny`), because the web
+ * client that emits it lives outside this repo and the app was previously
+ * listening for `TYPING` / `STOP_TYPING`, names the server never sends. That
+ * one mismatch is why the indicator never appeared anywhere.
+ */
+export const TYPING_EVENT = "CHAT_TYPING";
+
+/** Older names kept as receivers only — free insurance if the server changes. */
+const LEGACY_TYPING_EVENTS = ["TYPING", "typing", "chat:typing"];
+const LEGACY_STOP_EVENTS = ["STOP_TYPING", "stop_typing", "chat:stop_typing"];
+
+/** A relay this old is stale — the sender may have died without a `false`. */
+const TYPING_TTL = 4000;
 
 // Pull a user id out of the various shapes a presence payload might take.
 const idOf = (p: unknown): string | undefined => {
@@ -110,6 +135,54 @@ export function useRealtime() {
     socket.on("connect", announce);
     if (socket.connected) announce();
 
+    /* ── Typing ───────────────────────────────────────────────────────────
+       Subscribed HERE, not in the chat screen: a screen that attaches its
+       listener on mount misses everything that arrives before the socket has
+       finished connecting, and the chat LIST needs the same signal to put
+       "typing…" on a row it is not currently showing.
+
+       The relay is fire-and-forget, so a "stop" may never arrive (app killed,
+       network dropped). Every "typing" therefore carries its own expiry — the
+       indicator dies on its own rather than sticking forever. */
+    const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const clearTyping = (id: string) => {
+      const t = typingTimers.get(id);
+      if (t) clearTimeout(t);
+      typingTimers.delete(id);
+    };
+
+    const onStopTyping = (p: unknown) => {
+      const from = idOf((p as { from?: unknown })?.from ?? p);
+      if (!from) return;
+      clearTyping(from);
+      dispatch(userStoppedTyping(from));
+    };
+
+    // `{ from, typing }` — the boolean decides, so one handler covers both
+    // halves of the relay.
+    const onTyping = (p: unknown) => {
+      const payload = (p ?? {}) as { from?: unknown; typing?: boolean };
+      const from = idOf(payload.from ?? p);
+      if (!from || from === String(myId)) return;
+      if (payload.typing === false) {
+        onStopTyping(p);
+        return;
+      }
+      dispatch(userTyping(from));
+      clearTyping(from);
+      typingTimers.set(
+        from,
+        setTimeout(() => {
+          dispatch(userStoppedTyping(from));
+          typingTimers.delete(from);
+        }, TYPING_TTL),
+      );
+    };
+
+    socket.on(TYPING_EVENT, onTyping);
+    LEGACY_TYPING_EVENTS.forEach((e) => socket.on(e, onTyping));
+    LEGACY_STOP_EVENTS.forEach((e) => socket.on(e, onStopTyping));
+
     socket.on("ATTENDANCE_EVENT", refreshAttendance);
     socket.on("MESSAGE_CREATED", onMessage);
     socket.on("MESSAGE_UPDATED", onMessage);
@@ -147,6 +220,11 @@ export function useRealtime() {
     ROLE_EVENTS.forEach((e) => socket.on(e, refreshRoles));
 
     return () => {
+      typingTimers.forEach((t) => clearTimeout(t));
+      typingTimers.clear();
+      socket.off(TYPING_EVENT, onTyping);
+      LEGACY_TYPING_EVENTS.forEach((e) => socket.off(e, onTyping));
+      LEGACY_STOP_EVENTS.forEach((e) => socket.off(e, onStopTyping));
       ROLE_EVENTS.forEach((e) => socket.off(e, refreshRoles));
       NOTIF_EVENTS.forEach((e) => socket.off(e, refreshNotifs));
       socket.off("ATTENDANCE_EVENT", refreshAttendance);

@@ -8,12 +8,17 @@ import { useGetContactsQuery } from "../store/chatApi";
  * - `isUserOnline(userId)`  — by auth user id.
  * - `isEmpOnline(empCode)`  — by employee_id (EMP-xxxx), resolved to a user.
  *
- * The contacts query is shared/cached by RTK Query, so using this hook in many
- * places triggers a single network request — no performance impact.
+ * `isUserOnline` needs nothing but the socket presence map, so the directory is
+ * NOT fetched by default — pulling every employee just to draw a green dot on a
+ * chat row is a whole-company download for one boolean. Only a caller that maps
+ * employee codes (`isEmpOnline`) opts in with `{ directory: true }`; without it
+ * `isEmpOnline` reports offline rather than firing a hidden request.
  */
-export function usePresence() {
+export function usePresence(opts?: { directory?: boolean }) {
   const online = useAppSelector(selectOnlineMap);
-  const { data: contacts = [] } = useGetContactsQuery();
+  const { data: contacts = [] } = useGetContactsQuery(undefined, {
+    skip: !opts?.directory,
+  });
 
   const empToUser = useMemo(() => {
     const m: Record<string, string> = {};

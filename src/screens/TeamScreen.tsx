@@ -1,4 +1,4 @@
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import {
   BadgeCheck,
   Cake,
@@ -13,8 +13,8 @@ import {
   UsersRound,
   X,
   type LucideIcon,
-} from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+} from "lucide-react-native";
+import { useMemo, useState } from "react";
 import {
   Linking,
   Pressable,
@@ -23,17 +23,17 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar, personUser } from '../components/Avatar';
-import { BottomSheet } from '../components/BottomSheet';
-import { Badge, EmptyState, IconWell, Skeleton } from '../components/ui';
-import { usePresence } from '../hooks/usePresence';
-import { describeApiError } from '../lib/apiError';
-import { toast } from '../lib/toast';
-import type { RootStackParamList } from '../navigation/RootNavigator';
-import { selectCurrentUser, useAppSelector } from '../store';
+import { Avatar, personUser } from "../components/Avatar";
+import { BottomSheet } from "../components/BottomSheet";
+import { Badge, EmptyState, IconWell, Skeleton } from "../components/ui";
+import { usePresence } from "../hooks/usePresence";
+import { describeApiError } from "../lib/apiError";
+import { toast } from "../lib/toast";
+import type { RootStackParamList } from "../navigation/RootNavigator";
+import { selectCurrentUser, useAppSelector } from "../store";
 import {
   useGetEmployeesQuery,
   useGetMyProfileQuery,
@@ -41,10 +41,10 @@ import {
   type DepartmentRef,
   type Employee,
   type ManagerRef,
-} from '../store/employeesApi';
-import { radius, shadow, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
+} from "../store/employeesApi";
+import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
 
 /**
  * A department is rarely more than this, and the endpoint pages server-side —
@@ -56,14 +56,16 @@ const PAGE = 200;
 /* ── Ref helpers ──────────────────────────────────────────────────────────── */
 
 /** `"64ab…"` or `{ _id: "64ab…", … }` → the object form, or undefined. */
-function refOf<T extends { _id: string }>(value?: T | string): Partial<T> | undefined {
+function refOf<T extends { _id: string }>(
+  value?: T | string,
+): Partial<T> | undefined {
   if (!value) return undefined;
-  return typeof value === 'string' ? ({ _id: value } as Partial<T>) : value;
+  return typeof value === "string" ? ({ _id: value } as Partial<T>) : value;
 }
 
 /** Digits only. A stored number may carry spaces, dashes or a `+`. */
 function digitsOf(phone?: string): string {
-  return (phone ?? '').replace(/\D/g, '');
+  return (phone ?? "").replace(/\D/g, "");
 }
 
 /** WhatsApp wants a country code; a bare 10-digit Indian number has none. */
@@ -105,14 +107,14 @@ function PersonRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={[
-        person.name ?? 'Teammate',
+        person.name ?? "Teammate",
         person.designation,
         person.employee_id,
-        online ? 'online' : null,
-        birthday ? 'birthday today' : null,
+        online ? "online" : null,
+        birthday ? "birthday today" : null,
       ]
         .filter(Boolean)
-        .join(', ')}
+        .join(", ")}
       accessibilityHint="Opens contact details"
       style={({ pressed }) => ({
         backgroundColor: c.card,
@@ -133,7 +135,7 @@ function PersonRow({
         {birthday ? (
           <View
             style={{
-              position: 'absolute',
+              position: "absolute",
               right: -2,
               bottom: -2,
               backgroundColor: surface.warning.tint,
@@ -149,7 +151,7 @@ function PersonRow({
              on one avatar is a puzzle, not a signal. */
           <View
             style={{
-              position: 'absolute',
+              position: "absolute",
               right: 0,
               bottom: 0,
               backgroundColor: surface.success.tint,
@@ -163,7 +165,11 @@ function PersonRow({
 
       <View className="flex-1">
         <View className="flex-row items-center gap-1.5">
-          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.cardTitleSm}
+            numberOfLines={1}
+          >
             {person.name || person.employee_id}
           </Text>
           {isMe ? (
@@ -181,7 +187,7 @@ function PersonRow({
           className={`mt-0.5 ${T.caption}`}
           numberOfLines={1}
         >
-          {person.designation || 'Designation not set'}
+          {person.designation || "Designation not set"}
         </Text>
       </View>
 
@@ -208,7 +214,9 @@ function PersonRow({
 
         {/* Presence of a number, not a second way to dial: the sheet owns every
             action, so one tap target does one thing. */}
-        {person.phone ? <Phone size={13} strokeWidth={2} color={c.textFaint} /> : null}
+        {person.phone ? (
+          <Phone size={13} strokeWidth={2} color={c.textFaint} />
+        ) : null}
       </View>
     </Pressable>
   );
@@ -249,7 +257,11 @@ function ContactRow({
         <Text style={{ color: c.textMuted }} className={T.nano}>
           {label}
         </Text>
-        <Text style={{ color: c.text }} className={`mt-0.5 ${T.cardTitleSm}`} numberOfLines={1}>
+        <Text
+          style={{ color: c.text }}
+          className={`mt-0.5 ${T.cardTitleSm}`}
+          numberOfLines={1}
+        >
           {value}
         </Text>
       </View>
@@ -260,7 +272,7 @@ function ContactRow({
 /* ── Screen ───────────────────────────────────────────────────────────────── */
 
 /**
- * My team — everyone in the signed-in employee's own department.
+ * Team — everyone in the signed-in employee's own department.
  *
  * The department comes from `GET /employees/me/profile`, with the session user
  * as an instant fallback so the list can start loading on the first frame
@@ -273,10 +285,12 @@ export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const { c, brand, primary, dark } = useTheme();
   const me = useAppSelector(selectCurrentUser);
-  // Presence + the employee-code → chat-user-id map, both off one cached query.
-  const { empToUser, isEmpOnline } = usePresence();
+  // Presence + the employee-code → chat-user-id map. This screen is the one
+  // place that needs the whole directory (every teammate row is keyed by
+  // employee code), so it explicitly opts into that fetch.
+  const { empToUser, isEmpOnline } = usePresence({ directory: true });
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   /** The teammate whose contact sheet is open. */
   const [selected, setSelected] = useState<Employee | null>(null);
 
@@ -286,7 +300,7 @@ export default function TeamScreen() {
   const departmentName = dept?.department_name ?? me?.department_name;
 
   const team = useGetEmployeesQuery(
-    { department_id: departmentId, status: 'active', limit: PAGE },
+    { department_id: departmentId, status: "active", limit: PAGE },
     { skip: !departmentId },
   );
   const birthdays = useGetUpcomingBirthdaysQuery({ days: 30 });
@@ -304,12 +318,13 @@ export default function TeamScreen() {
 
   const people = useMemo(() => {
     const all = team.data?.items ?? [];
-    return [...all].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    return [...all].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [team.data]);
 
   /** The manager's full record when they are in this department too. */
   const managerRecord = useMemo(
-    () => (manager?._id ? people.find((p) => p._id === manager._id) : undefined),
+    () =>
+      manager?._id ? people.find((p) => p._id === manager._id) : undefined,
     [people, manager],
   );
 
@@ -348,7 +363,9 @@ export default function TeamScreen() {
    * — `usePresence` already builds the bridge from the cached contacts list, so
    * resolving it here costs no extra request.
    */
-  const chatUserId = selected?.employee_id ? empToUser[selected.employee_id] : undefined;
+  const chatUserId = selected?.employee_id
+    ? empToUser[selected.employee_id]
+    : undefined;
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
@@ -372,17 +389,25 @@ export default function TeamScreen() {
         </Pressable>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.section} numberOfLines={1}>
-            My Team
+          <Text
+            style={{ color: c.text }}
+            className={T.section}
+            numberOfLines={1}
+          >
+            Team
           </Text>
-          <Text style={{ color: c.textMuted }} className={T.caption} numberOfLines={1}>
-            {departmentName ?? 'Your department'}
-            {loading ? '' : ` · ${total} ${total === 1 ? 'person' : 'people'}`}
+          <Text
+            style={{ color: c.textMuted }}
+            className={T.caption}
+            numberOfLines={1}
+          >
+            {departmentName ?? "Your department"}
+            {loading ? "" : ` · ${total} ${total === 1 ? "person" : "people"}`}
           </Text>
         </View>
 
         <Pressable
-          onPress={() => navigation.navigate('Birthdays')}
+          onPress={() => navigation.navigate("Birthdays")}
           accessibilityRole="button"
           accessibilityLabel="Birthdays"
           style={({ pressed }) => ({
@@ -425,7 +450,12 @@ export default function TeamScreen() {
             onChangeText={setQuery}
             placeholder="Search name, role or ID"
             placeholderTextColor={c.textFaint}
-            style={{ flex: 1, color: c.text, fontFamily: 'Outfit_500Medium', fontSize: 14 }}
+            style={{
+              flex: 1,
+              color: c.text,
+              fontFamily: "Outfit_500Medium",
+              fontSize: 14,
+            }}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -433,7 +463,7 @@ export default function TeamScreen() {
           />
           {query ? (
             <Pressable
-              onPress={() => setQuery('')}
+              onPress={() => setQuery("")}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Clear search"
@@ -450,7 +480,7 @@ export default function TeamScreen() {
             nothing. */}
         {birthdayToday.length > 0 ? (
           <Pressable
-            onPress={() => navigation.navigate('Birthdays')}
+            onPress={() => navigation.navigate("Birthdays")}
             accessibilityRole="button"
             accessibilityLabel={`${birthdayToday.length} birthdays in your team today. Open birthdays`}
             style={({ pressed }) => ({
@@ -469,12 +499,19 @@ export default function TeamScreen() {
               <Cake size={18} strokeWidth={2.2} color={surface.warning.tint} />
             </IconWell>
             <View className="flex-1">
-              <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+              <Text
+                style={{ color: c.text }}
+                className={T.cardTitleSm}
+                numberOfLines={1}
+              >
                 {birthdayToday.length === 1
-                  ? `${birthdayToday[0].name?.split(' ')[0] ?? 'A teammate'}'s birthday today`
+                  ? `${birthdayToday[0].name?.split(" ")[0] ?? "A teammate"}'s birthday today`
                   : `${birthdayToday.length} birthdays in your team today`}
               </Text>
-              <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`}>
+              <Text
+                style={{ color: c.textMuted }}
+                className={`mt-0.5 ${T.micro}`}
+              >
                 Tap to send your wishes
               </Text>
             </View>
@@ -493,12 +530,16 @@ export default function TeamScreen() {
             >
               Reporting to
             </Text>
-            <View style={{ paddingHorizontal: space.screen, marginTop: space.md }}>
+            <View
+              style={{ paddingHorizontal: space.screen, marginTop: space.md }}
+            >
               <Pressable
-                onPress={() => (managerRecord ? setSelected(managerRecord) : undefined)}
+                onPress={() =>
+                  managerRecord ? setSelected(managerRecord) : undefined
+                }
                 disabled={!managerRecord}
                 accessibilityRole="button"
-                accessibilityLabel={`Manager ${manager.name ?? ''}`}
+                accessibilityLabel={`Manager ${manager.name ?? ""}`}
                 style={({ pressed }) => ({
                   backgroundColor: c.card,
                   borderRadius: radius.card - 4,
@@ -519,21 +560,27 @@ export default function TeamScreen() {
                   size={48}
                 />
                 <View className="flex-1">
-                  <Text style={{ color: c.text }} className={T.cardTitle} numberOfLines={1}>
-                    {manager.name || manager.employee_id || 'Your manager'}
+                  <Text
+                    style={{ color: c.text }}
+                    className={T.cardTitle}
+                    numberOfLines={1}
+                  >
+                    {manager.name || manager.employee_id || "Your manager"}
                   </Text>
                   <Text
                     style={{ color: c.textMuted }}
                     className={`mt-0.5 ${T.micro}`}
                     numberOfLines={1}
                   >
-                    {manager.designation || 'Reporting manager'}
+                    {manager.designation || "Reporting manager"}
                   </Text>
                 </View>
                 <Badge
                   label="Manager"
                   tone={primary}
-                  icon={<Crown size={11} strokeWidth={2.6} color={primary.tint} />}
+                  icon={
+                    <Crown size={11} strokeWidth={2.6} color={primary.tint} />
+                  }
                 />
               </Pressable>
             </View>
@@ -546,10 +593,16 @@ export default function TeamScreen() {
             style={{ color: c.textFaint, paddingHorizontal: space.screen }}
             className={`uppercase ${T.micro}`}
           >
-            {query ? `${results.length} matching` : 'Teammates'}
+            {query ? `${results.length} matching` : "Teammates"}
           </Text>
 
-          <View style={{ paddingHorizontal: space.screen, marginTop: space.md, gap: space.md }}>
+          <View
+            style={{
+              paddingHorizontal: space.screen,
+              marginTop: space.md,
+              gap: space.md,
+            }}
+          >
             {loading ? (
               <>
                 <Skeleton height={74} radius={radius.card - 4} />
@@ -559,13 +612,17 @@ export default function TeamScreen() {
               </>
             ) : !departmentId ? (
               <EmptyState
-                icon={<UserRoundX size={32} strokeWidth={1.6} color={brand[600]} />}
+                icon={
+                  <UserRoundX size={32} strokeWidth={1.6} color={brand[600]} />
+                }
                 title="No department yet"
                 message="Your record has not been mapped to a department, so there is no team to show. HR can set this on your profile."
               />
             ) : team.error ? (
               <EmptyState
-                icon={<UsersRound size={32} strokeWidth={1.6} color={brand[600]} />}
+                icon={
+                  <UsersRound size={32} strokeWidth={1.6} color={brand[600]} />
+                }
                 title="Could not load your team"
                 message={describeApiError(team.error).title}
                 actionLabel="Try again"
@@ -574,14 +631,14 @@ export default function TeamScreen() {
             ) : results.length === 0 ? (
               <EmptyState
                 icon={<Search size={32} strokeWidth={1.6} color={brand[600]} />}
-                title={query ? 'No one matches that' : 'No teammates yet'}
+                title={query ? "No one matches that" : "No teammates yet"}
                 message={
                   query
-                    ? `Nothing in ${departmentName ?? 'your department'} matches "${query.trim()}".`
-                    : 'You are the only active person in this department right now.'
+                    ? `Nothing in ${departmentName ?? "your department"} matches "${query.trim()}".`
+                    : "You are the only active person in this department right now."
                 }
-                actionLabel={query ? 'Clear search' : undefined}
-                onAction={query ? () => setQuery('') : undefined}
+                actionLabel={query ? "Clear search" : undefined}
+                onAction={query ? () => setQuery("") : undefined}
               />
             ) : (
               results.map((p) => (
@@ -589,7 +646,9 @@ export default function TeamScreen() {
                   key={p._id}
                   person={p}
                   isMe={Boolean(myEmployeeId && p.employee_id === myEmployeeId)}
-                  birthday={Boolean(p.employee_id && todayCodes.has(p.employee_id))}
+                  birthday={Boolean(
+                    p.employee_id && todayCodes.has(p.employee_id),
+                  )}
                   online={isEmpOnline(p.employee_id)}
                   onPress={() => setSelected(p)}
                 />
@@ -601,10 +660,15 @@ export default function TeamScreen() {
               rather than quietly showing the first 200 as if that were all. */}
           {!loading && total > people.length ? (
             <Text
-              style={{ color: c.textFaint, paddingHorizontal: space.screen, marginTop: space.md }}
+              style={{
+                color: c.textFaint,
+                paddingHorizontal: space.screen,
+                marginTop: space.md,
+              }}
               className={T.micro}
             >
-              Showing the first {people.length} of {total}. Use search to find someone specific.
+              Showing the first {people.length} of {total}. Use search to find
+              someone specific.
             </Text>
           ) : null}
         </View>
@@ -622,27 +686,50 @@ export default function TeamScreen() {
         <View style={{ padding: space.screen }}>
           <View className="items-center">
             <Avatar user={personUser(selected ?? {})} size={72} />
-            <Text style={{ color: c.text }} className={`mt-3 text-center ${T.section}`}>
-              {selected?.name || selected?.employee_id || 'Teammate'}
+            <Text
+              style={{ color: c.text }}
+              className={`mt-3 text-center ${T.section}`}
+            >
+              {selected?.name || selected?.employee_id || "Teammate"}
             </Text>
-            <Text style={{ color: c.textMuted }} className={`mt-0.5 text-center ${T.secondary}`}>
-              {selected?.designation || '—'}
+            <Text
+              style={{ color: c.textMuted }}
+              className={`mt-0.5 text-center ${T.secondary}`}
+            >
+              {selected?.designation || "—"}
             </Text>
 
-            <View className="mt-3 flex-row flex-wrap justify-center" style={{ gap: space.sm }}>
-              {departmentName ? <Badge label={departmentName} tone={primary} /> : null}
+            <View
+              className="mt-3 flex-row flex-wrap justify-center"
+              style={{ gap: space.sm }}
+            >
+              {departmentName ? (
+                <Badge label={departmentName} tone={primary} />
+              ) : null}
               {selected?.employee_id ? (
                 <Badge
                   label={selected.employee_id}
                   tone={surface.neutral}
-                  icon={<BadgeCheck size={11} strokeWidth={2.6} color={surface.neutral.tint} />}
+                  icon={
+                    <BadgeCheck
+                      size={11}
+                      strokeWidth={2.6}
+                      color={surface.neutral.tint}
+                    />
+                  }
                 />
               ) : null}
               {selected?.employee_id && todayCodes.has(selected.employee_id) ? (
                 <Badge
                   label="Birthday today"
                   tone={surface.warning}
-                  icon={<Cake size={11} strokeWidth={2.6} color={surface.warning.tint} />}
+                  icon={
+                    <Cake
+                      size={11}
+                      strokeWidth={2.6}
+                      color={surface.warning.tint}
+                    />
+                  }
                 />
               ) : null}
             </View>
@@ -659,15 +746,15 @@ export default function TeamScreen() {
                 label="Message"
                 value={
                   selected?.employee_id && isEmpOnline(selected.employee_id)
-                    ? 'Online now'
-                    : 'Chat inside SHR'
+                    ? "Online now"
+                    : "Chat inside SHR"
                 }
                 tone={primary}
                 onPress={() => {
                   const target = selected;
                   setSelected(null);
                   if (!target) return;
-                  navigation.navigate('Chat', {
+                  navigation.navigate("Chat", {
                     userId: chatUserId,
                     name: target.name,
                     photo: target.profile_image ?? null,
@@ -683,7 +770,9 @@ export default function TeamScreen() {
                 label="Call"
                 value={phone}
                 tone={surface.success}
-                onPress={() => open(`tel:${digitsOf(phone)}`, 'Dialer open nahi ho paya.')}
+                onPress={() =>
+                  open(`tel:${digitsOf(phone)}`, "Dialer open nahi ho paya.")
+                }
               />
             ) : null}
 
@@ -693,7 +782,9 @@ export default function TeamScreen() {
                 label="WhatsApp"
                 value={phone as string}
                 tone={surface.success}
-                onPress={() => open(`https://wa.me/${wa}`, 'WhatsApp open nahi ho paya.')}
+                onPress={() =>
+                  open(`https://wa.me/${wa}`, "WhatsApp open nahi ho paya.")
+                }
               />
             ) : null}
 
@@ -704,13 +795,19 @@ export default function TeamScreen() {
                 value={selected.email}
                 tone={surface.info}
                 onPress={() =>
-                  open(`mailto:${selected.email}`, 'Mail app open nahi ho paya.')
+                  open(
+                    `mailto:${selected.email}`,
+                    "Mail app open nahi ho paya.",
+                  )
                 }
               />
             ) : null}
 
             {!phone && !selected?.email ? (
-              <Text style={{ color: c.textMuted }} className={`text-center ${T.secondary}`}>
+              <Text
+                style={{ color: c.textMuted }}
+                className={`text-center ${T.secondary}`}
+              >
                 No contact details shared for this teammate.
               </Text>
             ) : null}

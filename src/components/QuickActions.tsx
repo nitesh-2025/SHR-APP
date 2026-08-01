@@ -12,13 +12,19 @@ import {
   Users,
   UsersRound,
   type LucideIcon,
-} from 'lucide-react-native';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+} from "lucide-react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-import { toast } from '../lib/toast';
-import { radius, shadow, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
+import { toast } from "../lib/toast";
+import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
 
 /**
  * Cards visible at rest.
@@ -53,92 +59,92 @@ interface Action {
  */
 const ACTIONS: Action[] = [
   {
-    key: 'apply',
-    label: 'Apply Leave',
-    hint: 'New request',
+    key: "apply",
+    label: "Leave",
+    hint: "New request",
     icon: FileText,
     tone: surface.danger,
   },
   {
-    key: 'chat',
-    label: 'Chat',
-    hint: 'Message a colleague',
+    key: "chat",
+    label: "Chat",
+    hint: "Message a colleague",
     icon: MessageSquare,
     tone: surface.info,
   },
   {
-    key: 'team',
-    label: 'My Team',
-    hint: 'Your department',
+    key: "team",
+    label: "Team",
+    hint: "Your department",
     icon: UsersRound,
     tone: surface.success,
   },
   {
-    key: 'birthday',
-    label: 'Birthdays',
-    hint: 'Wish the team',
+    key: "birthday",
+    label: "Birthdays",
+    hint: "Wish the team",
     icon: Cake,
     tone: surface.warning,
   },
   {
-    key: 'refer',
-    label: 'Referrals',
-    hint: 'Refer a candidate',
+    key: "refer",
+    label: "Referrals",
+    hint: "Refer a candidate",
     icon: Gift,
     tone: surface.purple,
   },
   {
-    key: 'payslip',
-    label: 'Payslip',
-    hint: 'View salary',
+    key: "payslip",
+    label: "Payslip",
+    hint: "View salary",
     icon: Receipt,
     tone: surface.neutral,
     soon: true,
   },
   {
-    key: 'tickets',
-    label: 'Tickets',
-    hint: 'Raise an issue',
+    key: "tickets",
+    label: "Tickets",
+    hint: "Raise an issue",
     icon: LifeBuoy,
     tone: surface.info,
     soon: true,
   },
   {
-    key: 'calendar',
-    label: 'Calendar',
-    hint: 'Holidays',
+    key: "calendar",
+    label: "Calendar",
+    hint: "Holidays",
     icon: CalendarDays,
     tone: surface.success,
     soon: true,
   },
   {
-    key: 'meeting',
-    label: 'Meetings',
-    hint: 'Your schedule',
+    key: "meeting",
+    label: "Meetings",
+    hint: "Your schedule",
     icon: Users,
     tone: surface.warning,
     soon: true,
   },
   {
-    key: 'asset',
-    label: 'Assets',
-    hint: 'Request gear',
+    key: "asset",
+    label: "Assets",
+    hint: "Request gear",
     icon: Boxes,
     tone: surface.purple,
     soon: true,
   },
   {
-    key: 'policy',
-    label: 'HR Policy',
-    hint: 'Read the rules',
+    key: "policy",
+    label: "HR Policy",
+    hint: "Read the rules",
     icon: BookText,
     tone: surface.info,
     soon: true,
   },
   {
-    key: 'more',
-    label: 'More',
-    hint: 'All options',
+    key: "more",
+    label: "More",
+    hint: "All options",
     icon: LayoutGrid,
     tone: surface.neutral,
   },
@@ -161,7 +167,7 @@ function ActionCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${action.label}. ${action.hint}`}
-      accessibilityHint={action.soon ? 'Coming soon' : undefined}
+      accessibilityHint={action.soon ? "Coming soon" : undefined}
       style={({ pressed }) => ({
         width,
         backgroundColor: c.card,
@@ -239,7 +245,7 @@ export function QuickActions({
               toast.info(`${a.label} is coming soon.`);
               return;
             }
-            if (a.key === 'more') onMore?.();
+            if (a.key === "more") onMore?.();
             else onOpen?.(a.key);
           }}
         />

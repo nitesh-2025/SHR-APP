@@ -1,5 +1,5 @@
-import { AlertCircle, Send } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { AlertCircle, Send } from "lucide-react-native";
+import { useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -7,32 +7,32 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { BottomSheet } from './BottomSheet';
-import { Button } from './ui';
-import { describeApiError } from '../lib/apiError';
-import { toast } from '../lib/toast';
+import { BottomSheet } from "./BottomSheet";
+import { Button } from "./ui";
+import { describeApiError } from "../lib/apiError";
+import { toast } from "../lib/toast";
 import {
   useCreateRegularizationMutation,
   type RegularizationType,
-} from '../store/attendanceApi';
-import { radius, space, surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { fmtDate } from '../utils/date';
+} from "../store/attendanceApi";
+import { radius, space, surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { fmtDate } from "../utils/date";
 
 /**
  * Ordered by how often a day actually goes wrong, not by the enum's order in
  * the schema — a forgotten punch is the overwhelming majority of these.
  */
 const TYPES: { key: RegularizationType; label: string }[] = [
-  { key: 'missing_clock_out', label: 'Forgot to clock out' },
-  { key: 'missing_clock_in', label: 'Forgot to clock in' },
-  { key: 'wrong_time', label: 'Wrong time recorded' },
-  { key: 'late_waiver', label: 'Late — please waive' },
-  { key: 'work_from_home', label: 'Worked from home' },
-  { key: 'on_duty', label: 'On duty / field work' },
+  { key: "missing_clock_out", label: "Forgot to clock out" },
+  { key: "missing_clock_in", label: "Forgot to clock in" },
+  { key: "wrong_time", label: "Wrong time recorded" },
+  { key: "late_waiver", label: "Late — please waive" },
+  { key: "work_from_home", label: "Worked from home" },
+  { key: "on_duty", label: "On duty / field work" },
 ];
 
 /**
@@ -56,29 +56,29 @@ export function RegularizeSheet({
   const { height: sheetHeight } = useWindowDimensions();
   const [create, { isLoading }] = useCreateRegularizationMutation();
 
-  const [type, setType] = useState<RegularizationType>('missing_clock_out');
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
+  const [type, setType] = useState<RegularizationType>("missing_clock_out");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
 
   // Every open is a fresh request. Carrying the last one's reason over is how
   // people end up submitting the wrong explanation for the wrong day.
   useEffect(() => {
     if (visible) {
-      setType('missing_clock_out');
-      setReason('');
-      setError('');
+      setType("missing_clock_out");
+      setReason("");
+      setError("");
     }
   }, [visible]);
 
   const submit = async () => {
-    setError('');
+    setError("");
     if (!reason.trim()) {
-      setError('Please write a short reason — the reviewer only sees this.');
+      setError("Please write a short reason — the reviewer only sees this.");
       return;
     }
     try {
       await create({ date, type, reason: reason.trim() }).unwrap();
-      toast.success('Request sent', 'Your manager will review it.');
+      toast.success("Request sent", "Your manager will review it.");
       onClose();
     } catch (e) {
       setError(describeApiError(e).title);
@@ -109,10 +109,17 @@ export function RegularizeSheet({
 
         {error ? (
           <View
-            style={{ backgroundColor: surface.danger.bg, borderRadius: radius.well }}
+            style={{
+              backgroundColor: surface.danger.bg,
+              borderRadius: radius.well,
+            }}
             className="mt-4 flex-row items-start gap-2.5 px-4 py-3"
           >
-            <AlertCircle size={17} strokeWidth={2} color={surface.danger.tint} />
+            <AlertCircle
+              size={17}
+              strokeWidth={2}
+              color={surface.danger.tint}
+            />
             <Text
               style={{ color: surface.danger.text }}
               className={`flex-1 leading-5 ${T.secondary}`}
@@ -142,7 +149,7 @@ export function RegularizeSheet({
                   backgroundColor: active ? primary.bg : c.fill,
                   borderRadius: radius.pill,
                   borderWidth: 1,
-                  borderColor: active ? brand[600] : 'transparent',
+                  borderColor: active ? brand[600] : "transparent",
                   opacity: pressed ? 0.75 : 1,
                 })}
                 className="px-3.5 py-2"
@@ -179,34 +186,22 @@ export function RegularizeSheet({
           }}
           className={T.body}
         />
-
-        <Text
-          style={{ color: c.textFaint }}
-          className={`mt-4 ${T.micro}`}
-        >
-          You cannot edit attendance yourself — an admin reviews every request.
-        </Text>
       </ScrollView>
-
-      {/* ── Sticky action ────────────────────────────────────────────────
-          OUTSIDE the ScrollView, pinned to the bottom of the sheet.
-          Inside it, the button only existed once you scrolled to it — and on a
-          form this tall that meant it looked like there was no submit at all.
-          A primary action you have to go looking for is a missing one. */}
       <View
         style={{
-          paddingHorizontal: space.screen,
-          paddingTop: space.md,
-          paddingBottom: space.xs,
-          borderTopWidth: 1,
-          borderTopColor: c.border,
-          backgroundColor: c.card,
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
         }}
       >
         <Button
-          label={isLoading ? 'Sending…' : 'Send request'}
+          style={{
+            backgroundColor: "#22C55E",
+          }}
+          label={isLoading ? "Sending…" : "Send request"}
           icon={<Send size={18} strokeWidth={2} color="#FFFFFF" />}
           loading={isLoading}
+          variant="danger"
           onPress={submit}
         />
       </View>
