@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { useEffect, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
@@ -212,6 +212,52 @@ export function Badge({
         {label}
       </Text>
     </View>
+  );
+}
+
+/* ── Range chip ───────────────────────────────────────────────────────────── */
+
+/**
+ * The dropdown trigger that sits in a screen header — month, year, any short
+ * filter whose options open in a sheet.
+ *
+ * Tinted rather than outlined: it shares its row with a title, and a bordered
+ * control there reads as an input the header does not have. Attendance and
+ * Leave both use it, so "tap the chip, pick from a sheet" is learned once.
+ */
+export function RangeChip({
+  label,
+  a11y,
+  onPress,
+}: {
+  label: string;
+  /** Spoken label — include the current value AND the verb ("Change month"). */
+  a11y: string;
+  onPress: () => void;
+}) {
+  const { brand, primary } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      style={({ pressed }) => ({
+        backgroundColor: primary.bg,
+        borderRadius: radius.pill,
+        opacity: pressed ? 0.75 : 1,
+      })}
+      className="h-9 flex-row items-center gap-1 px-3"
+    >
+      <Text
+        style={{ color: brand[700] }}
+        className={T.badge}
+        numberOfLines={1}
+        allowFontScaling={false}
+      >
+        {label}
+      </Text>
+      <ChevronDown size={14} strokeWidth={2.6} color={brand[700]} />
+    </Pressable>
   );
 }
 

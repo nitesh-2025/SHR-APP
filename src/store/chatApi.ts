@@ -168,6 +168,9 @@ export const {
   useGetContactsQuery,
   useGetThreadsQuery,
   useGetConversationQuery,
+  // Older-history pages are fetched imperatively (on scroll), not by changing
+  // the hook's arg — the accumulating `merge` above needs the same cache entry.
+  useLazyGetConversationQuery,
   useSendMessageMutation,
   useUploadAttachmentsMutation,
   useMarkConversationReadMutation,

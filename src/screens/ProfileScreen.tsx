@@ -22,8 +22,10 @@ import { AppDrawer } from '../components/AppDrawer';
 import { Avatar, fullNameOf } from '../components/Avatar';
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from '../components/BottomNav';
 import { ShiftCard } from '../components/ShiftCard';
+import { ProgressBar } from '../components/ui';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { selectCurrentUser, useAppDispatch, useAppSelector } from '../store';
+import { useGetMyProfileQuery } from '../store/employeesApi';
 import { clearCredentials } from '../store/authSlice';
 import { danger, radius, shadow, space } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
@@ -40,10 +42,10 @@ interface Entry {
 
 // Identity first, then money, then paperwork, then account controls.
 const ENTRIES: Entry[] = [
-  { key: 'personal', label: 'Personal Information', icon: CircleUserRound, soon: true },
-  { key: 'bank', label: 'Bank Details', icon: Landmark, soon: true },
+  { key: 'personal', label: 'Personal Information', icon: CircleUserRound },
+  { key: 'bank', label: 'Bank Details', icon: Landmark },
   { key: 'documents', label: 'Documents', icon: FileText, soon: true },
-  { key: 'emergency', label: 'Emergency Contact', icon: UserRoundCog, soon: true },
+  { key: 'emergency', label: 'Emergency Contact', icon: UserRoundCog },
   { key: 'password', label: 'Change Password', icon: KeyRound, soon: true },
   { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, soon: true },
 ];
@@ -154,6 +156,10 @@ export default function ProfileScreen() {
 
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // The identity card can paint from the session user alone, but the edit rows
+  // and the completeness meter need the full record.
+  const profile = useGetMyProfileQuery();
+
   // `role` is a CODE (ADMIN) — only fall back to it when there is no label.
   const designation = user?.designation || user?.role_name || user?.role;
   const cardWidth = width - space.screen * 2;
@@ -164,6 +170,8 @@ export default function ProfileScreen() {
     else if (key === 'attendance') navigation.navigate('Attendance');
     else if (key === 'leaves') navigation.navigate('Leave');
     else if (key === 'apply') navigation.navigate('LeaveApply');
+    else if (key === 'personal' || key === 'bank' || key === 'emergency')
+      navigation.navigate('ProfileEdit', { section: key });
     else if (key === 'more') setMenuOpen(true);
   };
 
@@ -256,6 +264,59 @@ export default function ProfileScreen() {
             </View>
           </View>
         </LinearGradient>
+
+        {/* ── Completeness ─────────────────────────────────────────────────
+            Server-computed (`profile_score`), so it counts the same fields HR
+            counts. Hidden entirely at 100% and when the server sends no score —
+            a full bar is a bar that has nothing left to say, and a bar built
+            from a guessed denominator is worse than none. */}
+        {typeof profile.data?.profile_score === 'number' &&
+        profile.data.profile_score < 100 ? (
+          <Pressable
+            onPress={() => navigation.navigate('ProfileEdit', { section: 'personal' })}
+            accessibilityRole="button"
+            accessibilityLabel={`Profile ${profile.data.profile_score}% complete. Fill in the rest`}
+            style={({ pressed }) => ({
+              marginTop: space.lg,
+              backgroundColor: c.card,
+              borderRadius: radius.card,
+              borderWidth: 1,
+              borderColor: c.border,
+              padding: space.lg,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <View className="flex-row items-center justify-between">
+              <Text style={{ color: c.text }} className={T.cardTitleSm}>
+                Profile {profile.data.profile_score}% complete
+              </Text>
+              <ChevronRight size={17} strokeWidth={2} color={c.textFaint} />
+            </View>
+
+            <View className="mt-2.5">
+              <ProgressBar
+                value={profile.data.profile_score / 100}
+                color={brand[600]}
+                height={6}
+              />
+            </View>
+
+            {/* The server already names what is missing — repeating the first
+                few beats "add more details" by a mile. */}
+            {profile.data.profile_score_meta?.missing?.length ? (
+              <Text
+                style={{ color: c.textMuted }}
+                className={`mt-2 ${T.micro}`}
+                numberOfLines={2}
+              >
+                Missing: {profile.data.profile_score_meta.missing.slice(0, 4).join(', ')}
+                {profile.data.profile_score_meta.missing.length > 4
+                  ? ` +${profile.data.profile_score_meta.missing.length - 4} more`
+                  : ''}
+              </Text>
+            ) : null}
+          </Pressable>
+        ) : null}
 
         {/* ── Shift ────────────────────────────────────────────────────────
             A shift window is a fact about the PERSON, like their department or

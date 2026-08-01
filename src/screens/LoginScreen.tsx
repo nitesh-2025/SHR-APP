@@ -1,3 +1,4 @@
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,6 +24,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LoginBackdrop } from "../components/LoginBackdrop";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import { API_BASE_URL, TERMS_URL } from "../config/env";
 import { toast } from "../lib/toast";
 import { useAppDispatch } from "../store";
@@ -78,6 +80,7 @@ function describeLoginError(err: unknown): string {
 }
 
 export default function LoginScreen() {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
   const { brand } = useTheme();
@@ -343,6 +346,28 @@ export default function LoginScreen() {
             </View>
             <Text className="ml-2.5 font-ui text-[13px] text-slate-600">
               Remember me
+            </Text>
+          </Pressable>
+
+          {/* ── Forgot password ──────────────────────────────────────────
+              Right under the field it is about, and it carries the email
+              already typed — nobody should have to retype an address to prove
+              they cannot remember its password. */}
+          <Pressable
+            onPress={() =>
+              navigation.navigate("ForgotPassword", { email: email.trim() || undefined })
+            }
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot your password"
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            className="mt-3 self-start py-1"
+          >
+            <Text
+              style={{ color: brand[600] }}
+              className="font-ui-semibold text-[13px]"
+            >
+              Forgot password?
             </Text>
           </Pressable>
 

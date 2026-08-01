@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppDrawer } from "../components/AppDrawer";
 import { AttendanceCard } from "../components/AttendanceCard";
 import { fullNameOf } from "../components/Avatar";
+import { BirthdayBanner } from "../components/BirthdayBanner";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { LeaveBalanceCard } from "../components/LeaveBalanceCard";
 import { NotificationButton } from "../components/NotificationButton";
@@ -71,6 +72,10 @@ export default function DashboardScreen() {
     else if (key === "leaves") navigation.navigate("Leave");
     else if (key === "apply") navigation.navigate("LeaveApply");
     else if (key === "profile") navigation.navigate("Profile");
+    else if (key === "chat") navigation.navigate("Chats");
+    else if (key === "refer") navigation.navigate("Referrals");
+    else if (key === "team") navigation.navigate("Team");
+    else if (key === "birthday") navigation.navigate("Birthdays");
     else if (key === "more") setMenuOpen(true);
   };
 
@@ -134,8 +139,26 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* ── Your birthday ────────────────────────────────────────────────
+            Above the punch card, and only on the one day a year it applies:
+            being wished is the first thing you should see, not something to
+            scroll to past your own timesheet. */}
+        <BirthdayBanner
+          scope="mine"
+          onPress={() => navigation.navigate("Birthdays")}
+        />
+
         {/* ── Today's attendance (the punch lives here) ─────────────────── */}
         <AttendanceCard />
+
+        {/* ── Someone else's birthday ──────────────────────────────────────
+            Below the punch card — wishing a teammate is a nudge, not the
+            reason anyone opened the app. Renders nothing on a day with no
+            birthdays. */}
+        <BirthdayBanner
+          scope="others"
+          onPress={() => navigation.navigate("Birthdays")}
+        />
 
         {/* ── Shortcuts ────────────────────────────────────────────────── */}
         <View style={{ marginTop: space.xxl }}>

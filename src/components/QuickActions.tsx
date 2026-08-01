@@ -1,12 +1,16 @@
 import {
   BookText,
   Boxes,
+  Cake,
   CalendarDays,
   FileText,
+  Gift,
+  MessageSquare,
   LayoutGrid,
   LifeBuoy,
   Receipt,
   Users,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
@@ -56,11 +60,39 @@ const ACTIONS: Action[] = [
     tone: surface.danger,
   },
   {
+    key: 'chat',
+    label: 'Chat',
+    hint: 'Message a colleague',
+    icon: MessageSquare,
+    tone: surface.info,
+  },
+  {
+    key: 'team',
+    label: 'My Team',
+    hint: 'Your department',
+    icon: UsersRound,
+    tone: surface.success,
+  },
+  {
+    key: 'birthday',
+    label: 'Birthdays',
+    hint: 'Wish the team',
+    icon: Cake,
+    tone: surface.warning,
+  },
+  {
+    key: 'refer',
+    label: 'Referrals',
+    hint: 'Refer a candidate',
+    icon: Gift,
+    tone: surface.purple,
+  },
+  {
     key: 'payslip',
     label: 'Payslip',
     hint: 'View salary',
     icon: Receipt,
-    tone: surface.purple,
+    tone: surface.neutral,
     soon: true,
   },
   {

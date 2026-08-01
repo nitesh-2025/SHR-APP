@@ -149,6 +149,17 @@ export type CreateCandidateBody = {
   expected_ctc?: number;
   notes?: string;
   interview_at?: string;
+
+  // ── Referral ──────────────────────────────────────────────────────────
+  // Sent by the employee app when a candidate arrives through the referral
+  // form. They mirror the fields already on the Candidate model, so a referred
+  // candidate is a normal candidate that knows who sent them — not a second
+  // kind of record with its own pipeline.
+  referred_by?: string; // referrer ka USER id
+  referrer_name?: string;
+  referrer_code?: string; // referrer ka employee id (EMP-…)
+  referrer_email?: string;
+  referral_note?: string;
 };
 
 interface Envelope<T> {
@@ -209,7 +220,19 @@ export const recruitmentApi = createApi({
 
     getCandidates: b.query<
       { items: Candidate[]; meta?: PageMeta },
-      { job_id?: string; stage?: CandidateStage | ""; search?: string; limit?: number } | void
+      | {
+          job_id?: string;
+          stage?: CandidateStage | "";
+          search?: string;
+          limit?: number;
+          // Referral tracking — narrows to one referrer's candidates. Sent as a
+          // HINT: the caller must still filter what comes back on
+          // `referrer_code`, because a server that does not know this param
+          // would answer with the whole pipeline, and an employee must never
+          // see candidates they did not refer.
+          referrer_code?: string;
+        }
+      | void
     >({
       query: (params) => ({ url: "/candidates", params: (params || {}) as Record<string, unknown> }),
       transformResponse: (r: Envelope<Candidate[]>) => ({ items: r.data || [], meta: r.meta }),

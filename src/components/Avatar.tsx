@@ -25,6 +25,32 @@ export function fullNameOf(user?: AuthUser | null): string {
 }
 
 /**
+ * Adapt any `{ name, profile_image }` record onto the shape `Avatar` reads.
+ *
+ * Employees, birthday rows and chat contacts all carry ONE `name` string where
+ * `AuthUser` carries two. Splitting it here means the app still has a single
+ * avatar rather than a second implementation per list — same photo resolution,
+ * same initials fallback, same broken-image handling.
+ */
+export function personUser(person: {
+  _id?: string;
+  name?: string | null;
+  email?: string | null;
+  profile_image?: string | null;
+}): AuthUser {
+  const parts = (person.name ?? '').trim().split(/\s+/).filter(Boolean);
+  const photo = person.profile_image ?? null;
+  return {
+    _id: person._id ?? '',
+    email: person.email ?? '',
+    first_name: parts[0],
+    last_name: parts.slice(1).join(' ') || undefined,
+    profile_image: photo,
+    profile_photo: photo,
+  };
+}
+
+/**
  * Profile photo with an initials fallback. The URI is resolved across the field
  * names backends use for this (see `resolvePhotoUri`) and relative paths are
  * joined onto the API host. A URL that 404s would otherwise render as an empty

@@ -252,14 +252,31 @@ export function PunchSheet({
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.66}>
-      {/* `shrink` so the ScrollView gives way to the sheet's `maxHeight` and
-          scrolls inside it. Without it the content measures to its own height,
-          overflows the cap and is silently clipped — which is how the confirm
-          step's buttons ended up off-screen. */}
+      {/* `flexShrink: 1`, NOT a maxHeight of its own.
+
+          This used to be `maxHeight: screenHeight * 0.58`, and that number is
+          not the space this ScrollView actually gets: the panel caps at 0.66 ×
+          screen and then spends part of it on the grab handle (~22px) and on
+          `paddingBottom: insets.bottom + 8` (up to ~56px with a 3-button nav
+          bar). On anything but a tall phone with slim insets, 0.58 × screen is
+          MORE than what is left — and because RN defaults to `flexShrink: 0`,
+          the ScrollView was not shrunk to fit. It overflowed the panel, the
+          overflow was clipped, and it still believed its viewport was the full
+          0.58 so it never became scrollable. The clipped part is the bottom,
+          which is exactly where "Yes, Clock Out" sat.
+
+          Shrinking instead means the panel decides, and anything that no longer
+          fits scrolls rather than disappears. */}
       <ScrollView
-        style={{ maxHeight: screenHeight * 0.58 }}
+        // `flexGrow: 0` alongside it, so a short action list does not stretch
+        // the sheet to its cap — the panel stays as tall as its content.
+        style={{ flexShrink: 1, flexGrow: 0 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: space.screen, paddingTop: space.sm }}
+        contentContainerStyle={{
+          paddingHorizontal: space.screen,
+          paddingTop: space.sm,
+          paddingBottom: step === 'confirmOut' ? space.sm : space.screen,
+        }}
       >
         {step === 'confirmOut' ? (
           /* ── Confirm ──────────────────────────────────────────────────── */
@@ -300,26 +317,6 @@ export function PunchSheet({
               <Stat label="Break" value={fmtDuration(record?.total_break_minutes ?? 0)} />
             </View>
 
-            {error ? <ErrorNote text={error} /> : null}
-
-            <View className="mt-6 flex-row" style={{ gap: space.md }}>
-              <Button
-                label="No, not yet"
-                variant="ghost"
-                full={false}
-                disabled={clockOutState.isLoading}
-                onPress={() => setStep('actions')}
-                style={{ flex: 1 }}
-              />
-              <Button
-                label="Yes, Clock Out"
-                variant="primary"
-                full={false}
-                loading={clockOutState.isLoading}
-                onPress={() => punch(clockOut, 'Clocked out')}
-                style={{ flex: 1 }}
-              />
-            </View>
           </>
         ) : (
           /* ── Actions ──────────────────────────────────────────────────── */
@@ -367,6 +364,66 @@ export function PunchSheet({
           </View>
         )}
       </ScrollView>
+
+      {/* ── Decision footer ──────────────────────────────────────────────
+          Pinned OUTSIDE the ScrollView on purpose. A confirm sheet whose only
+          two buttons live at the bottom of a scrolling area is one short screen
+          away from having no visible way to say yes — and a user who cannot see
+          "Yes" does not conclude "I should scroll", they conclude the app is
+          broken. The summary above may scroll; the decision never does.
+
+          The error sits here too, for the same reason: a failed clock-out has
+          to be readable next to the button that failed. */}
+      {step === 'confirmOut' ? (
+        <View
+          style={{
+            paddingHorizontal: space.screen,
+            paddingTop: space.md,
+            paddingBottom: space.xs,
+            // Its own surface with a hairline above it, so the pair reads as a
+            // decision BAR rather than as two shapes floating at the bottom of
+            // a white sheet.
+            backgroundColor: c.card,
+            borderTopWidth: 1,
+            borderTopColor: c.border,
+          }}
+        >
+          {error ? <ErrorNote text={error} /> : null}
+
+          {/* No `className` on this row — a function-free plain style keeps it
+              clear of the one NativeWind merge that has already cost this app a
+              button (see the note in `ui.tsx`). */}
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: space.md,
+              marginTop: space.lg,
+            }}
+          >
+            {/* `secondary`, not `ghost`. Ghost is transparent with a hairline —
+                on a white sheet that is a button you have to hunt for, and the
+                way out of a confirm should never be the hard one to find. */}
+            <Button
+              label="No, not yet"
+              variant="secondary"
+              full={false}
+              disabled={clockOutState.isLoading}
+              onPress={() => setStep('actions')}
+              style={{ flex: 1 }}
+            />
+            {/* `primary` = solid brand fill, white type. The most contrast the
+                system has, which is what the committing action needs. */}
+            <Button
+              label="Yes, Clock Out"
+              variant="primary"
+              full={false}
+              loading={clockOutState.isLoading}
+              onPress={() => punch(clockOut, 'Clocked out')}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      ) : null}
     </BottomSheet>
   );
 }

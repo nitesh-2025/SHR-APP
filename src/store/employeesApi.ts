@@ -195,6 +195,16 @@ export interface EmployeeProfile {
   documents?: (EmployeeDocument & { uploaded_at?: string })[];
   // When true, the record is frozen — no update allowed anywhere until unlocked.
   is_lock?: boolean;
+
+  // Server-computed, same as on `Employee`. Optional here because it is a
+  // derived field: absent simply means "no score to show", never zero.
+  profile_score?: number;
+  profile_score_meta?: {
+    filled: number;
+    total: number;
+    missing?: string[];
+    computed_at?: string;
+  };
 }
 
 // One row of GET /employees/documents — an employee with their document array.

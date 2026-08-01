@@ -3,7 +3,6 @@ import {
   CalendarDays,
   CalendarX,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   LogIn,
@@ -29,7 +28,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { BottomSheet } from "../components/BottomSheet";
 import { RegularizeSheet } from "../components/RegularizeSheet";
-import { Badge, EmptyState, Segmented, Skeleton } from "../components/ui";
+import {
+  Badge,
+  EmptyState,
+  RangeChip,
+  Segmented,
+  Skeleton,
+} from "../components/ui";
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import {
@@ -523,44 +528,6 @@ function TabPane({
     <View style={{ flex: 1, display: active ? "flex" : "none" }}>
       {children}
     </View>
-  );
-}
-
-/* ── Range chip ───────────────────────────────────────────────────────────── */
-
-/** The month / year dropdown trigger in the header. */
-function RangeChip({
-  label,
-  a11y,
-  onPress,
-}: {
-  label: string;
-  a11y: string;
-  onPress: () => void;
-}) {
-  const { brand, primary } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={a11y}
-      style={({ pressed }) => ({
-        backgroundColor: primary.bg,
-        borderRadius: radius.pill,
-        opacity: pressed ? 0.75 : 1,
-      })}
-      className="h-9 flex-row items-center gap-1 px-3"
-    >
-      <Text
-        style={{ color: brand[700] }}
-        className={T.badge}
-        numberOfLines={1}
-        allowFontScaling={false}
-      >
-        {label}
-      </Text>
-      <ChevronDown size={14} strokeWidth={2.6} color={brand[700]} />
-    </Pressable>
   );
 }
 

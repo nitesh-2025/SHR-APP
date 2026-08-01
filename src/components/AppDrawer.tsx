@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import {
   Boxes,
+  Cake,
   CalendarDays,
   ChevronRight,
   ClipboardList,
@@ -8,10 +9,12 @@ import {
   Gift,
   LifeBuoy,
   LogOut,
+  MessageSquare,
   Moon,
   Sun,
   SunMoon,
   Users,
+  UsersRound,
   X,
   type LucideIcon,
 } from "lucide-react-native";
@@ -36,10 +39,13 @@ interface MenuEntry {
 const MENU: MenuEntry[] = [
   { key: "leaves", label: "My Leaves", icon: ClipboardList },
   { key: "attendance", label: "Attendance", icon: CalendarDays },
+  { key: "chat", label: "Chat", icon: MessageSquare },
+  { key: "team", label: "My Team", icon: UsersRound },
+  { key: "birthday", label: "Birthdays", icon: Cake },
   { key: "meeting", label: "Meeting", icon: Users, soon: true },
   { key: "calendar", label: "Calendar", icon: CalendarDays, soon: true },
   { key: "tickets", label: "Tickets", icon: LifeBuoy, soon: true },
-  { key: "refer", label: "Refer & Earn", icon: Gift, soon: true },
+  { key: "refer", label: "Referrals", icon: Gift },
   { key: "policy", label: "HR Policy", icon: FileText, soon: true },
   { key: "asset", label: "Asset Request", icon: Boxes, soon: true },
 ];
