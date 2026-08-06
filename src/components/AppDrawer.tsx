@@ -10,9 +10,11 @@ import {
   LifeBuoy,
   LogOut,
   MessageSquare,
+  Receipt,
   Moon,
   Sun,
   SunMoon,
+  Target,
   Users,
   UsersRound,
   X,
@@ -42,12 +44,16 @@ const MENU: MenuEntry[] = [
   { key: "chat", label: "Chat", icon: MessageSquare },
   { key: "team", label: "Team", icon: UsersRound },
   { key: "birthday", label: "Birthdays", icon: Cake },
-  { key: "meeting", label: "Meeting", icon: Users, soon: true },
-  { key: "calendar", label: "Calendar", icon: CalendarDays, soon: true },
-  { key: "tickets", label: "Tickets", icon: LifeBuoy, soon: true },
+  { key: "calendar", label: "Work Calendar", icon: CalendarDays },
+  { key: "tickets", label: "Tickets", icon: LifeBuoy },
+  { key: "payslip", label: "Salary", icon: Receipt },
+  { key: "performance", label: "My Performance", icon: Target },
   { key: "refer", label: "Referrals", icon: Gift },
-  { key: "policy", label: "HR Policy", icon: FileText, soon: true },
-  { key: "asset", label: "Asset Request", icon: Boxes, soon: true },
+  { key: "asset", label: "My Assets", icon: Boxes },
+  { key: "policy", label: "HR Policy", icon: FileText },
+  // No meetings API exists yet — labelled, not hidden, so the gap is visible
+  // rather than mysterious.
+  { key: "meeting", label: "Meeting", icon: Users, soon: true },
 ];
 
 /**

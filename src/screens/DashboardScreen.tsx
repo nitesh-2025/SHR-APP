@@ -16,6 +16,7 @@ import { QuickActions } from "../components/QuickActions";
 import { WeekSummary } from "../components/WeekSummary";
 import { SectionHeader } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useMenuNav } from "../navigation/useMenuNav";
 import { selectCurrentUser, useAppSelector } from "../store";
 import { useGetMyTodayQuery } from "../store/attendanceApi";
 import { useGetMyBalanceQuery } from "../store/leaveApi";
@@ -66,18 +67,13 @@ export default function DashboardScreen() {
   };
 
   // One place that maps a key to a destination, so the drawer, the bottom bar
-  // and the shortcut grid can never disagree about where a key goes.
-  const open = (key: string) => {
-    if (key === "attendance") navigation.navigate("Attendance");
-    else if (key === "leaves") navigation.navigate("Leave");
-    else if (key === "apply") navigation.navigate("LeaveApply");
-    else if (key === "profile") navigation.navigate("Profile");
-    else if (key === "chat") navigation.navigate("Chats");
-    else if (key === "refer") navigation.navigate("Referrals");
-    else if (key === "team") navigation.navigate("Team");
-    else if (key === "birthday") navigation.navigate("Birthdays");
-    else if (key === "more") setMenuOpen(true);
-  };
+  // and the shortcut rail can never disagree about where a key goes. It lives
+  // in `navigation/useMenuNav` — this used to be a per-screen copy of the same
+  // chain, and adding a screen meant remembering every copy.
+  const open = useMenuNav({
+    onMore: () => setMenuOpen(true),
+    email: user?.email,
+  });
 
   const hello = greeting();
   // First name only — the full name pushes the line to two rows on a narrow
