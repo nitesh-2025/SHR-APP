@@ -42,7 +42,14 @@ import {
   type Employee,
   type ManagerRef,
 } from "../store/employeesApi";
-import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import {
+  radius,
+  shadow,
+  space,
+  surface,
+  toneFor,
+  type Surface,
+} from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 
@@ -367,6 +374,13 @@ export default function TeamScreen() {
     ? empToUser[selected.employee_id]
     : undefined;
 
+  // Both of these strips are tinted panels, and a dark scheme that swaps them
+  // for a plain card throws the tint away — the amber that says "birthday" and
+  // the brand edge that says "this is your manager" are the only things marking
+  // them out from the rows below. `toneFor` keeps the hue on a dark canvas.
+  const cake = toneFor(surface.warning, dark);
+  const managerTone = toneFor(primary, dark);
+
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
       {/* ── Header ───────────────────────────────────────────────────────── */}
@@ -486,10 +500,10 @@ export default function TeamScreen() {
             style={({ pressed }) => ({
               marginHorizontal: space.screen,
               marginTop: space.lg,
-              backgroundColor: dark ? c.card : surface.warning.bg,
+              backgroundColor: cake.bg,
               borderRadius: radius.card - 4,
               borderWidth: 1,
-              borderColor: dark ? c.border : surface.warning.border,
+              borderColor: cake.border,
               padding: space.md,
               opacity: pressed ? 0.85 : 1,
             })}
@@ -544,7 +558,7 @@ export default function TeamScreen() {
                   backgroundColor: c.card,
                   borderRadius: radius.card - 4,
                   borderWidth: 1,
-                  borderColor: dark ? c.border : primary.border,
+                  borderColor: managerTone.border,
                   padding: space.lg,
                   opacity: pressed && managerRecord ? 0.85 : 1,
                   ...(dark ? shadow.none : shadow.soft),

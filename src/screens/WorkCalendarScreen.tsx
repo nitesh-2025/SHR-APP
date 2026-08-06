@@ -209,7 +209,12 @@ export default function WorkCalendarScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={holidays.isFetching && !holidays.isLoading}
+            // Both halves, not just the holidays — the config card has its own
+            // retry, but a pull that silently skips it gives no feedback.
+            refreshing={
+              (holidays.isFetching && !holidays.isLoading) ||
+              (config.isFetching && !config.isLoading)
+            }
             onRefresh={() => {
               holidays.refetch();
               config.refetch();
@@ -241,14 +246,28 @@ export default function WorkCalendarScreen() {
             </View>
 
             <View className="mt-2">
+              {/* Guarded despite the type saying these are required: a config
+                  row saved with a null time would otherwise print the literal
+                  string "undefined – undefined" in the Shift row. */}
               <PolicyRow
                 label="Shift"
-                value={`${shift.start_time} – ${shift.end_time}`}
+                value={
+                  shift.start_time && shift.end_time
+                    ? `${shift.start_time} – ${shift.end_time}`
+                    : "—"
+                }
               />
               <View style={{ backgroundColor: c.border }} className="h-px" />
-              <PolicyRow label="Grace" value={`${shift.grace_minutes} min`} />
+              <PolicyRow
+                label="Grace"
+                value={
+                  typeof shift.grace_minutes === "number"
+                    ? `${shift.grace_minutes} min`
+                    : "—"
+                }
+              />
               <View style={{ backgroundColor: c.border }} className="h-px" />
-              <PolicyRow label="Late after" value={shift.late_until} />
+              <PolicyRow label="Late after" value={shift.late_until || "—"} />
               {weeklyOffs ? (
                 <>
                   <View style={{ backgroundColor: c.border }} className="h-px" />
@@ -266,6 +285,43 @@ export default function WorkCalendarScreen() {
           </View>
         ) : config.isLoading ? (
           <Skeleton height={200} radius={radius.card} />
+        ) : config.error ? (
+          /* `/work-calendar/config` is an admin-leaning route and can 403.
+             Falling through to `null` made the shift times, grace window and
+             weekly-offs vanish with no message and no way to retry — the block
+             simply was not there, which reads as "this app does not show that"
+             rather than "this request failed". */
+          <View
+            style={{
+              backgroundColor: c.card,
+              borderRadius: radius.card,
+              borderWidth: 1,
+              borderColor: c.border,
+              padding: space.lg + 2,
+              ...(dark ? shadow.none : shadow.card),
+            }}
+          >
+            <View className="flex-row items-center gap-2">
+              <TriangleAlert size={16} strokeWidth={2.2} color={surface.warning.tint} />
+              <Text style={{ color: c.text }} className={T.cardTitleSm}>
+                Working-week policy unavailable
+              </Text>
+            </View>
+            <Text style={{ color: c.textMuted }} className={`mt-1.5 ${T.secondary}`}>
+              {describeApiError(config.error).title}
+            </Text>
+            <Pressable
+              onPress={() => config.refetch()}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading the working-week policy"
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              className="mt-2.5 self-start"
+            >
+              <Text style={{ color: brand[600] }} className={T.buttonSm}>
+                Try again
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {/* ── Holidays ───────────────────────────────────────────────────── */}

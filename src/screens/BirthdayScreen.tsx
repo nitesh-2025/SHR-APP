@@ -38,7 +38,7 @@ import {
   useGetUpcomingBirthdaysQuery,
   type UpcomingBirthday,
 } from "../store/employeesApi";
-import { radius, shadow, space, surface } from "../theme/colors";
+import { radius, shadow, space, surface, toneFor } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import { fmtDayShort } from "../utils/date";
@@ -169,13 +169,18 @@ function TodayCard({
 }) {
   const { c, dark, brand } = useTheme();
 
+  // The amber wash is what separates a card for TODAY from the plain rows of
+  // upcoming birthdays below it. Falling back to the ordinary card colour in
+  // dark mode erased that difference, so the tone is re-mixed for the scheme.
+  const cake = toneFor(surface.warning, dark);
+
   return (
     <View
       style={{
-        backgroundColor: dark ? c.card : surface.warning.bg,
+        backgroundColor: cake.bg,
         borderRadius: radius.card - 4,
         borderWidth: 1,
-        borderColor: dark ? c.border : surface.warning.border,
+        borderColor: cake.border,
         padding: space.lg,
         ...(dark ? shadow.none : shadow.soft),
       }}
@@ -188,9 +193,11 @@ function TodayCard({
               position: "absolute",
               right: -2,
               bottom: -2,
-              backgroundColor: surface.warning.tint,
+              backgroundColor: cake.tint,
+              // The ring cuts the badge out of whatever it overlaps, so it has
+              // to follow the card fill rather than name a colour of its own.
               borderWidth: 2,
-              borderColor: dark ? c.card : surface.warning.bg,
+              borderColor: cake.bg,
             }}
             className="h-6 w-6 items-center justify-center rounded-full"
           >

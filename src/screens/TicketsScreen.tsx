@@ -64,11 +64,27 @@ const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const statusKey = (raw?: string) =>
   String(raw ?? "open").toLowerCase().replace(/[\s-]+/g, "_");
 
+/**
+ * "All" is first and is the safe fallback for a reason.
+ *
+ * Each chip sends ONE canonical spelling to the server, but the backend is
+ * shared and its history is not canonical — `statusKey` above exists precisely
+ * because `in_progress`, `in-progress` and `In Progress` all sit in old rows.
+ * A ticket stored under a variant renders fine under All and then vanishes
+ * under its own chip. That is a backend normalisation job, not something the
+ * client can fix without pulling the whole queue down and filtering locally,
+ * so the empty state on a filtered view says "try another status" rather than
+ * claiming nothing exists.
+ *
+ * Rejected is listed: it is a terminal state a person actively looks for, and
+ * without a chip it was reachable only by scrolling All.
+ */
 const FILTERS: { key: string; label: string }[] = [
   { key: "", label: "All" },
   { key: "open", label: "Open" },
   { key: "in_progress", label: "In progress" },
   { key: "resolved", label: "Resolved" },
+  { key: "rejected", label: "Rejected" },
   { key: "closed", label: "Closed" },
 ];
 
@@ -198,6 +214,10 @@ export default function TicketsScreen() {
       toast.success("Ticket raised", "You will be notified as it progresses.");
       setComposeOpen(false);
       reset();
+      // Drop back to "All" so the new ticket is actually visible. Filtered to
+      // Resolved, a successful submit landed the user on an empty list — which
+      // reads as a failed submit however cheerful the toast was.
+      setStatus("");
       list.refetch();
     } catch (e) {
       setError(describeApiError(e).title);

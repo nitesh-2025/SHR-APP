@@ -43,7 +43,14 @@ import {
   type AttendanceStatus,
   type Punch,
 } from "../store/attendanceApi";
-import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import {
+  radius,
+  shadow,
+  space,
+  surface,
+  toneFor,
+  type Surface,
+} from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import {
@@ -247,14 +254,20 @@ function PunchCol({
   time: string | null;
   tone: Surface;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
+
+  // Green for In, red for Out — that pairing is the only thing distinguishing
+  // the two columns at a glance, so the well is re-mixed for the dark canvas
+  // rather than dropped to a neutral fill.
+  const well = toneFor(tone, dark);
+
   return (
     <View className="flex-1 flex-row items-center gap-2.5">
       <View
-        style={{ backgroundColor: tone.bg, borderRadius: radius.well - 6 }}
+        style={{ backgroundColor: well.bg, borderRadius: radius.well - 6 }}
         className="h-8 w-8 items-center justify-center"
       >
-        <Icon size={15} strokeWidth={2.2} color={tone.tint} />
+        <Icon size={15} strokeWidth={2.2} color={well.tint} />
       </View>
 
       <View className="flex-1">
