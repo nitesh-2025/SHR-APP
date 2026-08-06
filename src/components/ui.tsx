@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { radius, shadow, space, type Surface } from '../theme/colors';
+import { radius, shadow, space, toneFor, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
 
@@ -197,18 +197,22 @@ export function Badge({
   tone: Surface;
   icon?: ReactNode;
 }) {
+  // Re-mixed for the active scheme — the raw recipe is white-canvas only.
+  const { dark } = useTheme();
+  const t = toneFor(tone, dark);
+
   return (
     <View
-      style={{ backgroundColor: tone.bg, borderRadius: radius.pill }}
+      style={{ backgroundColor: t.bg, borderRadius: radius.pill }}
       className="flex-row items-center gap-1.5 px-2.5 py-1"
     >
       {icon ?? (
         <View
-          style={{ backgroundColor: tone.tint }}
+          style={{ backgroundColor: t.tint }}
           className="h-1.5 w-1.5 rounded-full"
         />
       )}
-      <Text style={{ color: tone.text }} className={T.badge} numberOfLines={1}>
+      <Text style={{ color: t.text }} className={T.badge} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -275,13 +279,14 @@ export function IconWell({
   size?: number;
   round?: boolean;
 }) {
+  const { dark } = useTheme();
   return (
     <View
       style={{
         width: size,
         height: size,
         borderRadius: round ? size / 2 : radius.well,
-        backgroundColor: tone.bg,
+        backgroundColor: toneFor(tone, dark).bg,
       }}
       className="items-center justify-center"
     >
