@@ -37,7 +37,15 @@ export function resolveHolidays(
       // `month` is 1-based on the wire. Guarding the 0 case rather than
       // subtracting blindly: one record stored 0-based would otherwise shift
       // every holiday a month backwards, silently.
-      date = new Date(year, Math.max(0, h.month - 1), h.day);
+      const m = Math.max(0, h.month - 1);
+      const candidate = new Date(year, m, h.day);
+
+      // JS Date overflows rather than rejecting: a recurring 29 February rolls
+      // forward to 1 March in a non-leap year, and the holiday would then be
+      // filed under March with the wrong weekday. A date that lands in a month
+      // it was not asked for did not occur that year — drop it rather than
+      // print a confident wrong answer.
+      date = candidate.getMonth() === m ? candidate : null;
     } else if (h.date) {
       const parsed = parseYmd(h.date);
       if (parsed && parsed.getFullYear() === year) date = parsed;

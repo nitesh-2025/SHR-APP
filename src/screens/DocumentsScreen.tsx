@@ -43,7 +43,16 @@ interface Row {
   /** ID number where the record carries one — masked, never shown in full. */
   number?: string;
   url?: string;
-  verified: boolean;
+  /**
+   * `null` when the record carries no verification flag at all.
+   *
+   * The statutory block (PAN, Aadhaar, UAN, PF, ESIC) has no `is_verified`
+   * field, so an earlier pass defaulted those rows to `false` — which rendered
+   * an amber "Pending" chip against IDs HR had already checked, and counted
+   * them out of the "n verified" tally. Three states, not two: verified, not
+   * verified, and never claimed either way.
+   */
+  verified: boolean | null;
   uploadedAt?: string;
 }
 
@@ -64,7 +73,14 @@ function mask(value?: string): string | undefined {
 
 function DocRow({ row, onOpen }: { row: Row; onOpen: (url: string) => void }) {
   const { c, dark } = useTheme();
-  const tone = toneFor(row.verified ? surface.success : surface.warning, dark);
+  const tone = toneFor(
+    row.verified === true
+      ? surface.success
+      : row.verified === false
+        ? surface.warning
+        : surface.neutral,
+    dark,
+  );
 
   const body = (
     <View className="flex-row items-center gap-3">
@@ -90,14 +106,18 @@ function DocRow({ row, onOpen }: { row: Row; onOpen: (url: string) => void }) {
         </Text>
       </View>
 
-      {row.verified ? (
+      {row.verified === true ? (
         <Badge
           label="Verified"
           tone={surface.success}
           icon={<BadgeCheck size={11} strokeWidth={2.6} color={surface.success.tint} />}
         />
-      ) : (
+      ) : row.verified === false ? (
         <Badge label="Pending" tone={surface.warning} />
+      ) : (
+        /* HR never stated a verification status for this one. "On file" is
+           what the record actually says; "Pending" would be us inventing it. */
+        <Badge label="On file" tone={surface.neutral} />
       )}
 
       {row.url ? (
@@ -166,9 +186,7 @@ export default function DocumentsScreen() {
         label: s.label,
         number: mask(entry.number),
         url: entry.url || undefined,
-        // The statutory block carries no verification flag; treating "present"
-        // as "verified" would invent a status HR never set.
-        verified: false,
+        verified: null,
       });
     }
 
@@ -186,7 +204,11 @@ export default function DocumentsScreen() {
     return out;
   }, [profile.data]);
 
-  const verified = rows.filter((r) => r.verified).length;
+  // Only rows that actually carry a flag can be counted, and only those form
+  // the denominator — "2 verified" out of seven when five never had a flag was
+  // a support ticket waiting to happen.
+  const flagged = rows.filter((r) => r.verified !== null);
+  const verified = flagged.filter((r) => r.verified).length;
 
   const open = async (url: string) => {
     try {
@@ -204,7 +226,7 @@ export default function DocumentsScreen() {
         title="Documents"
         subtitle={
           rows.length
-            ? `${rows.length} on file · ${verified} verified`
+            ? `${rows.length} on file${flagged.length ? ` · ${verified}/${flagged.length} verified` : ""}`
             : "What HR holds for you"
         }
         onBack={() => navigation.goBack()}

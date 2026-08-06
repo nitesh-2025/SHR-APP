@@ -260,7 +260,16 @@ function ReviewCard({
         ) : null}
       </View>
 
-      {showScore && (kpis.length > 0 || review.strengths || review.improvements) ? (
+      {/* `comments` belongs in this test too. Every one of the four is optional
+          on the wire, and a finalized review whose reviewer wrote only free-text
+          comments — no KPIs, no strengths, no improvements — rendered a card
+          with no expand control at all, so the one thing they DID write was
+          unreachable. */}
+      {showScore &&
+      (kpis.length > 0 ||
+        review.strengths ||
+        review.improvements ||
+        review.comments) ? (
         <>
           <View style={{ backgroundColor: c.border }} className="h-px" />
 
@@ -275,7 +284,11 @@ function ReviewCard({
             className="h-12 flex-row items-center justify-center gap-1.5"
           >
             <Text style={{ color: c.textMuted }} className={T.buttonSm}>
-              {open ? "Hide detail" : `${kpis.length} KPIs · show detail`}
+              {open
+                ? "Hide detail"
+                : kpis.length
+                  ? `${kpis.length} KPIs · show detail`
+                  : "Show reviewer's notes"}
             </Text>
             {open ? (
               <ChevronUp size={15} strokeWidth={2.2} color={c.textMuted} />

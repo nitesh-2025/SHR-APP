@@ -201,6 +201,19 @@ export default function PayslipScreen() {
         {/* ── Package ────────────────────────────────────────────────────── */}
         {profile.isLoading ? (
           <Skeleton height={HERO_HEIGHT} radius={radius.card} />
+        ) : profile.error ? (
+          /* A failed fetch must not wear the hero's clothes.
+             Without this branch a 401 or a 500 rendered the full gradient card
+             reading "ANNUAL CTC — Not on file": a transport error presented to
+             the employee as an authoritative statement that HR holds no salary
+             for them. */
+          <EmptyState
+            icon={<TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />}
+            title="Could not load your package"
+            message={describeApiError(profile.error).title}
+            actionLabel="Try again"
+            onAction={() => profile.refetch()}
+          />
         ) : (
           <LinearGradient
             colors={[brand[600], brand[800]]}

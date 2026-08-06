@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -8,6 +8,14 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  RadialGradient,
+  Stop,
+} from 'react-native-svg';
 
 import { radius, shadow, space, toneFor, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
@@ -370,8 +378,61 @@ export function Skeleton({
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 
 /**
- * Never a blank screen. An illustration-sized glyph, one line of what happened,
- * one line of what to do, and the action itself when there is one.
+ * Square so the ring family stays centred on the glyph whatever the copy under
+ * it does. 152 rather than the old 80 because the ornament, not the glyph, is
+ * now the object — the glyph is what sits at the middle of it.
+ */
+const EMPTY_FIELD = 152;
+
+/**
+ * Ring radii, and how far each one has faded by the time you reach it. The gaps
+ * WIDEN outward (16 then 20), which is what makes the family read as something
+ * radiating away rather than as a target with a bullseye in it.
+ */
+const EMPTY_RINGS = [27, 43, 63] as const;
+const EMPTY_RING_FADE = [1, 0.66, 0.38] as const;
+
+/**
+ * `url(#id)` references are resolved per document on Android, not per `<Svg>`,
+ * so two of these mounted at once would share one gradient. A counter is enough
+ * — `useId()` emits `:r0:`, and a colon is not legal inside a url() reference.
+ */
+let emptyFieldSeq = 0;
+
+/**
+ * Never a blank screen. One line of what happened, one line of what to do, and
+ * the action itself when there is one.
+ *
+ * The glyph used to sit in an 80px disc filled with `primary.bg`, and that disc
+ * was wrong twice over. It is the empty state every framework ships with, which
+ * meant the screen a demo account spends most of its life on was the least
+ * considered screen in the product. And `primary.bg` is the 50 step of the
+ * accent ramp — the exact pairing §2.6 of the design doc warns about — so in
+ * dark mode it was an 80px slab of near-white punched into the `#0F172A`
+ * canvas, the brightest object on a screen whose entire message is that there
+ * is nothing to look at.
+ *
+ * What replaces it is the ornament the app already owns. The gradient heroes on
+ * Leave and Payslip carry a family of concentric arcs anchored off the card's
+ * bottom-right corner and cropped by the card edge, so what you see there is a
+ * slice of a much larger figure. Here — the one composition in the app that is
+ * centred by rule — the same figure is drawn whole and centred on the glyph,
+ * with the hero's horizon curve passing underneath it. Everywhere else you get
+ * the edge of these rings; the empty state is where you see where they come
+ * from. Extending the existing ornament matters more than the ornament itself:
+ * a second decorative language would have cancelled out the first.
+ *
+ * Nothing here has a hard edge. The fill behind the glyph is a radial wash of
+ * the accent that reaches zero alpha before the outer ring, and the horizon is
+ * stroked with a gradient that fades at both ends instead of stopping dead at
+ * the field boundary the way the hero's does behind its clip. The rings are
+ * drawn in `toneFor(primary, dark).border`, so dark mode re-mixes them from the
+ * accent itself rather than glowing a light-mode tint at the user.
+ *
+ * The entrance is one timing value driving both the block's lift and the
+ * ornament's settle, 260ms ease-out. Two separately-timed animations would have
+ * spent more of the user's attention on the absence of data than the data ever
+ * gets when it arrives.
  */
 export function EmptyState({
   icon,
@@ -386,17 +447,82 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
-  const { c, primary } = useTheme();
+  const { c, dark, primary } = useTheme();
+  const tone = toneFor(primary, dark);
+  const uid = useRef(`es${(emptyFieldSeq += 1)}`).current;
+
+  const enter = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
+  }, [enter]);
+
+  const block = useAnimatedStyle(() => ({
+    opacity: enter.value,
+    transform: [{ translateY: (1 - enter.value) * 10 }],
+  }));
+  // Same value, later in its own travel: the ornament is still settling as the
+  // text finishes arriving, which is what keeps it reading as one movement.
+  const ornament = useAnimatedStyle(() => ({
+    transform: [{ scale: 0.94 + enter.value * 0.06 }],
+  }));
+
+  const half = EMPTY_FIELD / 2;
 
   return (
-    <View className="items-center px-10 pt-12">
-      <View
-        style={{ backgroundColor: primary.bg }}
-        className="h-20 w-20 items-center justify-center rounded-full"
+    <Animated.View className="items-center px-10 pt-8" style={block}>
+      <Animated.View
+        style={[{ width: EMPTY_FIELD, height: EMPTY_FIELD }, ornament]}
+        className="items-center justify-center"
       >
+        <Svg
+          width={EMPTY_FIELD}
+          height={EMPTY_FIELD}
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, top: 0 }}
+        >
+          <Defs>
+            <RadialGradient id={`${uid}wash`} cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor={primary.tint} stopOpacity={dark ? 0.2 : 0.12} />
+              <Stop offset="0.45" stopColor={primary.tint} stopOpacity={dark ? 0.07 : 0.05} />
+              <Stop offset="1" stopColor={primary.tint} stopOpacity={0} />
+            </RadialGradient>
+            <SvgLinearGradient id={`${uid}horizon`} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={primary.tint} stopOpacity={0} />
+              <Stop offset="0.5" stopColor={primary.tint} stopOpacity={dark ? 0.28 : 0.18} />
+              <Stop offset="1" stopColor={primary.tint} stopOpacity={0} />
+            </SvgLinearGradient>
+          </Defs>
+
+          <Circle cx={half} cy={half} r={half} fill={`url(#${uid}wash)`} />
+
+          {EMPTY_RINGS.map((r, i) => (
+            <Circle
+              key={r}
+              cx={half}
+              cy={half}
+              r={r}
+              fill="none"
+              stroke={tone.border}
+              strokeWidth={1.2}
+              strokeOpacity={EMPTY_RING_FADE[i]}
+            />
+          ))}
+
+          {/* The hero's horizon, same curve, same 1.4 stroke. */}
+          <Path
+            d={`M0 ${EMPTY_FIELD * 0.72} Q ${EMPTY_FIELD * 0.3} ${EMPTY_FIELD * 0.58} ${
+              EMPTY_FIELD * 0.62
+            } ${EMPTY_FIELD * 0.76} T ${EMPTY_FIELD} ${EMPTY_FIELD * 0.68}`}
+            fill="none"
+            stroke={`url(#${uid}horizon)`}
+            strokeWidth={1.4}
+          />
+        </Svg>
+
         {icon}
-      </View>
-      <Text style={{ color: c.text }} className={`mt-4 text-center ${T.cardTitle}`}>
+      </Animated.View>
+
+      <Text style={{ color: c.text }} className={`mt-2 text-center ${T.cardTitle}`}>
         {title}
       </Text>
       {message ? (
@@ -415,6 +541,6 @@ export function EmptyState({
           style={{ marginTop: space.xl }}
         />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }

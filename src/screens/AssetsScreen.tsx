@@ -6,7 +6,6 @@ import {
   Star,
   TriangleAlert,
 } from "lucide-react-native";
-import { useMemo } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,12 +14,8 @@ import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
 import { useMenuNav } from "../navigation/useMenuNav";
-import { selectCurrentUser, useAppSelector } from "../store";
-import {
-  useGetAssetRequestsQuery,
-  type AssetRequest,
-} from "../store/assetRequestsApi";
 import { useGetAssetsQuery, type AssetRow } from "../store/assetsApi";
+import { useGetMyProfileQuery } from "../store/employeesApi";
 import { radius, shadow, space, surface, toneFor, type Surface } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
@@ -35,19 +30,6 @@ const CONDITION_TONE: Record<string, Surface> = {
   damaged: surface.danger,
 };
 
-const REQUEST_TONE: Record<string, { label: string; tone: Surface }> = {
-  pending: { label: "Pending", tone: surface.warning },
-  approved: { label: "Approved", tone: surface.info },
-  fulfilled: { label: "Fulfilled", tone: surface.success },
-  rejected: { label: "Rejected", tone: surface.purple },
-  cancelled: { label: "Cancelled", tone: surface.neutral },
-};
-
-const URGENCY_TONE: Record<string, Surface> = {
-  low: surface.neutral,
-  medium: surface.info,
-  high: surface.danger,
-};
 
 function Fact({ label, value }: { label: string; value: string }) {
   const { c } = useTheme();
@@ -156,88 +138,6 @@ function AssetCard({ asset }: { asset: AssetRow }) {
   );
 }
 
-/* ── Request row ──────────────────────────────────────────────────────────── */
-
-function RequestCard({ request }: { request: AssetRequest }) {
-  const { c, dark } = useTheme();
-  const status = REQUEST_TONE[String(request.status).toLowerCase()] ?? {
-    label: request.status,
-    tone: surface.neutral,
-  };
-  const urgency = URGENCY_TONE[String(request.urgency).toLowerCase()];
-
-  return (
-    <View
-      style={{
-        backgroundColor: c.card,
-        borderRadius: radius.card - 4,
-        borderWidth: 1,
-        borderColor: c.border,
-        padding: space.lg,
-        ...(dark ? shadow.none : shadow.soft),
-      }}
-    >
-      <View className="flex-row items-start gap-3">
-        <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
-            {request.quantity > 1 ? `${request.quantity} × ` : ""}
-            {request.item}
-          </Text>
-          <Text
-            style={{ color: c.textMuted }}
-            className={`mt-0.5 ${T.micro}`}
-            numberOfLines={1}
-          >
-            {[
-              request.category,
-              `Raised ${fmtDate(request.createdAt)}`,
-              request.needed_by ? `Needed by ${fmtDate(request.needed_by)}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
-        </View>
-
-        <Badge label={status.label} tone={status.tone} />
-      </View>
-
-      {request.reason ? (
-        <Text
-          style={{ color: c.textMuted }}
-          className={`mt-2.5 leading-5 ${T.secondary}`}
-          numberOfLines={2}
-        >
-          {request.reason}
-        </Text>
-      ) : null}
-
-      <View className="mt-3 flex-row items-center gap-2">
-        {urgency ? <Badge label={`${request.urgency} urgency`} tone={urgency} /> : null}
-      </View>
-
-      {/* The reviewer's verdict, in their words. A bare "Rejected" chip with no
-          reason is the fastest way to generate a follow-up ticket. */}
-      {request.review_note ? (
-        <View
-          style={{
-            backgroundColor: toneFor(status.tone, dark).bg,
-            borderRadius: radius.well - 4,
-            padding: space.md,
-          }}
-          className="mt-3"
-        >
-          <Text style={{ color: toneFor(status.tone, dark).text }} className={T.nano}>
-            Reviewer
-          </Text>
-          <Text style={{ color: c.text }} className={`mt-0.5 ${T.secondary}`}>
-            {request.review_note}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 /* ── Screen ───────────────────────────────────────────────────────────────── */
 
 /**
@@ -253,40 +153,36 @@ export default function AssetsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { c, brand } = useTheme();
-  const user = useAppSelector(selectCurrentUser);
   const go = useMenuNav();
+
+  /**
+   * `assigned_to_id` is an EMPLOYEE id, not a USER id.
+   *
+   * The two are different documents in this backend and the app holds both:
+   * `selectCurrentUser` is the auth USER, while the asset register's custodian
+   * ref carries `employee_id` / `designation` — the Employee shape (compare
+   * `ManagerRef` in `employeesApi`). `TeamScreen` documents the same split and
+   * bridges it for chat.
+   *
+   * Filtering by the user id matched nothing, so every employee with a laptop
+   * on the register saw "Nothing assigned to you" — an empty list, not an
+   * error, so there was nothing to suggest it was wrong.
+   */
+  const profile = useGetMyProfileQuery();
+  const employeeId = profile.data?._id;
 
   // Skipped rather than fired with an empty id: `assigned_to_id=""` is dropped
   // by most query builders, and the request would come back with the WHOLE
   // company's asset register.
   const list = useGetAssetsQuery(
-    { assigned_to_id: user?._id ?? "", limit: 100 },
-    { skip: !user?._id },
+    { assigned_to_id: employeeId ?? "", limit: 100 },
+    { skip: !employeeId },
   );
 
   const items = list.data ?? [];
-
-  /**
-   * Requests raised for this employee.
-   *
-   * `/asset-requests` takes no `requester_id` filter, so the narrowing happens
-   * here on email. That is a DISPLAY filter, not a security boundary — the
-   * backend still decides what it hands back for this token, exactly as it does
-   * for the ticket queue. If the server ever widens that, this screen shows
-   * fewer rows rather than more.
-   */
-  const requestsQuery = useGetAssetRequestsQuery(
-    { limit: 50 },
-    { skip: !user?.email },
-  );
-
-  const requests = useMemo(() => {
-    const email = user?.email?.trim().toLowerCase();
-    if (!email) return [];
-    return (requestsQuery.data?.items ?? []).filter(
-      (r) => r.requester_email?.trim().toLowerCase() === email,
-    );
-  }, [requestsQuery.data, user?.email]);
+  // The profile has to land before the asset query can even be asked.
+  const loading = profile.isLoading || list.isLoading;
+  const failed = profile.error ?? list.error;
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
@@ -309,24 +205,33 @@ export default function AssetsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={list.isFetching && !list.isLoading}
-            onRefresh={() => list.refetch()}
+            refreshing={
+              (list.isFetching && !list.isLoading) ||
+              (profile.isFetching && !profile.isLoading)
+            }
+            onRefresh={() => {
+              profile.refetch();
+              list.refetch();
+            }}
             tintColor={brand[600]}
           />
         }
       >
-        {list.isLoading ? (
+        {loading ? (
           <>
             <Skeleton height={150} radius={radius.card - 4} />
             <Skeleton height={150} radius={radius.card - 4} />
           </>
-        ) : list.error ? (
+        ) : failed ? (
           <EmptyState
             icon={<TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />}
             title="Could not load your assets"
-            message={describeApiError(list.error).title}
+            message={describeApiError(failed).title}
             actionLabel="Try again"
-            onAction={() => list.refetch()}
+            onAction={() => {
+              profile.refetch();
+              list.refetch();
+            }}
           />
         ) : items.length === 0 ? (
           <EmptyState
@@ -340,24 +245,24 @@ export default function AssetsScreen() {
           items.map((a) => <AssetCard key={a._id} asset={a} />)
         )}
 
-        {/* ── Requests ───────────────────────────────────────────────────
-            Only when there are some. An "Open requests (0)" heading on a
-            screen that cannot create one is a dead section. */}
-        {requests.length > 0 ? (
-          <>
-            <Text style={{ color: c.text }} className={`mt-2 ${T.section}`}>
-              Your requests
-            </Text>
-            {requests.map((r) => (
-              <RequestCard key={r._id} request={r} />
-            ))}
-          </>
-        ) : null}
+        {/* ── No "Your requests" section, deliberately ────────────────────
+            A first pass rendered the employee's own rows from
+            `/api/asset-requests` and narrowed them client-side on
+            `requester_email`. That slice is the ADMIN list — its `ListArgs`
+            accepts only status/search/page/limit, with no requester filter —
+            so on any deployment where this token can read the collection, up
+            to 50 OTHER employees' rows (name, email, department, stated
+            reason, reviewer notes) would land in the device's Redux store and
+            in network logs. Filtering the render does not un-fetch the data.
+
+            The section comes back the day the backend grows a `/me` route or
+            scopes the list per token. Until then the honest answer is not to
+            ask. */}
 
         {/* The one action this screen offers, and it deliberately leaves the
             screen: there is no create endpoint on `/asset-requests`, and the
             ticket queue already has an approval trail behind it. */}
-        {list.isLoading || list.error ? null : (
+        {loading || failed ? null : (
           <Button
             label="Request new gear"
             variant="secondary"
