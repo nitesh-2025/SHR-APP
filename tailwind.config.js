@@ -7,58 +7,32 @@ module.exports = {
   // `colorScheme` from nativewind, so the utility names stay identical.
   theme: {
     extend: {
-      // ── Palette ───────────────────────────────────────────────────────────
-      // Three accents, one neutral ramp. Mirrored in `src/theme/colors.ts` for
-      // the props that need a raw string (SVG, Lucide, gradients) — NativeWind
-      // reads this file at build time and cannot import TS, so both must move
-      // together. Scale names are unchanged from the old green palette on
-      // purpose: every existing `bg-brand-*` class re-themes for free.
-      colors: {
-        // Primary — teal. Identity, CTAs, anything "working / good".
-        brand: {
-          50: '#EFF7F5',
-          100: '#DFEFEB',
-          200: '#BFE0D7',
-          300: '#94CBBB',
-          400: '#64B39D',
-          500: '#389E81', // base
-          600: '#318B72', // primary CTA
-          700: '#29755F',
-          800: '#205C4B',
-          900: '#184236',
-        },
-        // Secondary — orange. Attention, paused states, warm actions.
-        accent: {
-          50: '#FDF4EF',
-          100: '#FAE7DC',
-          200: '#F6D0B9',
-          300: '#EFAD86',
-          400: '#E7884E',
-          500: '#E06216', // base
-          600: '#CA5814',
-          700: '#AA4A11',
-          800: '#863B0D',
-          900: '#652C0A',
-        },
-        // Tertiary — violet. Completed / archived / the categorical third.
-        plum: {
-          50: '#F5F0F8',
-          100: '#EBE0F1',
-          200: '#D8C2E4',
-          300: '#B992CE',
-          400: '#975DB6',
-          500: '#73249D', // base
-          600: '#65208A',
-          700: '#551B74',
-          800: '#43155B',
-          900: '#300F42',
-        },
-        // App canvas (light mode). Dark mode surfaces come from `theme/colors`
-        // at runtime — a Tailwind class cannot switch scheme.
-        canvas: '#F8FAFC',
-      },
-      // Web keyframes/animations are intentionally NOT ported — RN has no CSS
-      // animation engine. Motion belongs in Reanimated/Animated instead.
+      // ── No colour palette here. On purpose. ───────────────────────────────
+      //
+      // This file used to define a SECOND brand system — `brand-*` teal,
+      // `accent-*` orange, `plum-*` violet, `canvas` — alongside the runtime
+      // ramps in `src/theme/`. Two palettes in one app is how an interface
+      // starts looking assembled rather than designed, and it had already
+      // leaked: the login error banner was painted orange while every other
+      // failure in the app was red.
+      //
+      // Colour cannot live here anyway. NativeWind compiles these classes at
+      // BUILD time, so a Tailwind colour can never follow the light/dark
+      // scheme or a runtime accent — the two things this app's colour system
+      // is built on. `bg-brand-600` was a value frozen at compile time
+      // pretending to be a token.
+      //
+      // So colour has exactly one home: `src/theme/colors.ts` (neutral ramp,
+      // semantic surfaces, scheme) and `src/theme/themes.ts` (the primary
+      // ramp), both read through `useTheme()` and applied as inline styles.
+      // Tailwind keeps what genuinely never changes: layout, spacing, type.
+      //
+      // Tailwind's own defaults (`text-white`, `bg-black/40`, `text-slate-500`)
+      // still resolve — nothing was removed from the base theme, only the
+      // duplicate brand system that was extending it.
+      //
+      // Web keyframes/animations are likewise NOT ported — RN has no CSS
+      // animation engine. Motion belongs in Reanimated.
       fontFamily: {
         // Named by ROLE, not weight. In React Native a weight comes from the
         // font FILE, so `font-bold` (which only emits font-weight) does nothing

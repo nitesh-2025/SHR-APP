@@ -195,7 +195,12 @@ export function BottomNav({
   active = "home",
   onSelect,
 }: {
-  active?: NavKey;
+  /**
+   * The highlighted tab, or `null` for a screen that has no tab of its own
+   * (Leave, Team, Referrals…). Defaulting those to `home` lit the wrong tab and
+   * made the bar say you were somewhere you were not.
+   */
+  active?: NavKey | null;
   onSelect: (key: NavKey | "apply") => void;
 }) {
   const insets = useSafeAreaInsets();

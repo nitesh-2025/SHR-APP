@@ -30,6 +30,7 @@ import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { ShiftCard } from "../components/ShiftCard";
 import { ProgressBar } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useMenuNav } from "../navigation/useMenuNav";
 import { selectCurrentUser, useAppDispatch, useAppSelector } from "../store";
 import { useGetMyProfileQuery } from "../store/employeesApi";
 import { clearCredentials } from "../store/authSlice";
@@ -50,10 +51,10 @@ interface Entry {
 const ENTRIES: Entry[] = [
   { key: "personal", label: "Personal Information", icon: CircleUserRound },
   { key: "bank", label: "Bank Details", icon: Landmark },
-  { key: "documents", label: "Documents", icon: FileText, soon: true },
+  { key: "documents", label: "Documents", icon: FileText },
   { key: "emergency", label: "Emergency Contact", icon: UserRoundCog },
-  { key: "password", label: "Change Password", icon: KeyRound, soon: true },
-  { key: "privacy", label: "Privacy Policy", icon: ShieldCheck, soon: true },
+  { key: "password", label: "Change Password", icon: KeyRound },
+  { key: "privacy", label: "Privacy Policy", icon: ShieldCheck },
 ];
 
 /* ── Decorative arcs on the identity card ─────────────────────────────────── */
@@ -184,15 +185,13 @@ export default function ProfileScreen() {
   const cardWidth = width - space.screen * 2;
   const cardHeight = 132;
 
-  const go = (key: string) => {
-    if (key === "home") navigation.navigate("Dashboard");
-    else if (key === "attendance") navigation.navigate("Attendance");
-    else if (key === "leaves") navigation.navigate("Leave");
-    else if (key === "apply") navigation.navigate("LeaveApply");
-    else if (key === "personal" || key === "bank" || key === "emergency")
-      navigation.navigate("ProfileEdit", { section: key });
-    else if (key === "more") setMenuOpen(true);
-  };
+  // Routing lives in one place now (`useMenuNav`) — this screen, the dashboard
+  // and every pushed screen with a bottom bar all speak the same key set.
+  const go = useMenuNav({
+    onMore: () => setMenuOpen(true),
+    // Carried into the reset flow so nobody retypes their own address.
+    email: user?.email,
+  });
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">

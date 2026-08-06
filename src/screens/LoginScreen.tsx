@@ -1,4 +1,5 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { AlertCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -36,7 +37,7 @@ import {
   readRememberedEmail,
   saveRememberedEmail,
 } from "../store/tokenStorage";
-import { neutral } from "../theme/colors";
+import { neutral, radius, space, surface, toneFor } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import {
   DEVICE_LABEL,
@@ -83,7 +84,10 @@ export default function LoginScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
-  const { brand } = useTheme();
+  const { brand, dark } = useTheme();
+  // Login paints on a fixed white sheet today, but the recipe is scheme-aware
+  // so the banner survives the day this screen learns about dark mode.
+  const err = toneFor(surface.danger, dark);
   const [login, { isLoading }] = useLoginMutation();
 
   const [email, setEmail] = useState("");
@@ -243,18 +247,39 @@ export default function LoginScreen() {
           </Text>
 
           {error ? (
-            // Errors use the orange accent, not a fourth red — the palette is
-            // three hues and this is still "attention", not a new category.
-            <View className="mt-5 flex-row rounded-2xl border border-accent-200 bg-accent-50 px-4 py-3.5">
-              <View className="mr-3 mt-0.5 h-4 w-4 items-center justify-center rounded-full bg-accent-500">
-                <Text
-                  className="font-display text-[10px] leading-[13px] text-white"
-                  allowFontScaling={false}
-                >
-                  !
-                </Text>
-              </View>
-              <Text className="flex-1 font-ui text-[13px] leading-5 text-accent-700">
+            /* A failed sign-in is `danger`, and it says so in the same red as
+               every other failure in the app.
+
+               It used to be painted in an orange `accent-*` ramp that existed
+               only in `tailwind.config.js` — a second brand hue, in the one
+               place a first-time user is guaranteed to look. The runtime
+               `surface.danger` recipe carries the same meaning, re-mixes itself
+               for dark mode, and is the token every other error already uses. */
+            <View
+              style={{
+                marginTop: space.xl,
+                backgroundColor: err.bg,
+                borderColor: err.border,
+                borderWidth: 1,
+                borderRadius: radius.input,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.md + 2,
+              }}
+              className="flex-row items-start gap-3"
+            >
+              {/* A real glyph, not a hand-drawn "!" in a circle. Colour alone
+                  cannot carry severity — roughly one man in twelve cannot tell
+                  this red from the surrounding neutrals. */}
+              <AlertCircle
+                size={17}
+                strokeWidth={2.2}
+                color={err.tint}
+                style={{ marginTop: 1 }}
+              />
+              <Text
+                style={{ color: err.text }}
+                className="flex-1 font-ui text-[13px] leading-5"
+              >
                 {error}
               </Text>
             </View>

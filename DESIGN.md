@@ -49,6 +49,11 @@ number here is read directly from the code — nothing is approximated.
 1. **One primary accent carries the whole app.** Status meaning comes from the
    semantic set (success / warning / danger / info / purple), never from a second
    decorative brand hue.
+   **Corollary — colour has one home.** It lives in `src/theme/` and is applied
+   as an inline style. If you are about to write a colour into
+   `tailwind.config.js`, a component, or a hex literal in a screen, you are
+   forking the palette. The last fork put an orange error banner on the login
+   screen while every other failure in the app was red.
 2. **Depth comes from soft elevation, never heavy borders.** A 1px hairline is
    used only where two surfaces of the same color meet.
 3. **In dark mode the shadow is dropped and the hairline nearly disappears** —
@@ -68,16 +73,26 @@ number here is read directly from the code — nothing is approximated.
 
 ## 2. Color
 
-> ⚠️ **Important — two palettes exist in the codebase today.**
-> - **Runtime palette** (`src/theme/themes.ts` + `src/theme/colors.ts`) drives everything
->   read through `useTheme()` → `brand[…]`, `c.*`, `surface.*`. **Default = Green.**
-> - **Tailwind palette** (`tailwind.config.js`) defines `brand-*` (teal), `accent-*`
->   (orange), `plum-*` (violet) for build-time NativeWind classes. Only a few places
->   use it — notably the Login error banner (`bg-accent-50 / border-accent-200 / text-accent-700`).
+> ✅ **One palette. Settled.**
 >
-> **Design decision needed:** unify on one. Recommended → keep the runtime Green
-> ramp as brand and re-map the Tailwind `accent-*` usage to `warning`. Both are
-> documented below so nothing is lost.
+> Colour has exactly one home: **`src/theme/colors.ts`** (neutral ramp, semantic
+> surfaces, light/dark scheme) and **`src/theme/themes.ts`** (the primary ramp),
+> both read through `useTheme()` and applied as **inline styles**. **Default = Green.**
+>
+> `tailwind.config.js` defines **no colours at all**. It previously carried a
+> second brand system — `brand-*` teal, `accent-*` orange, `plum-*` violet,
+> `canvas` — which was deleted. Only three lines in the whole app had ever used
+> it (the Login error banner), and those now use `surface.danger` like every
+> other failure in the product.
+>
+> **Why colour cannot live in Tailwind here:** NativeWind compiles these classes
+> at BUILD time, so a Tailwind colour can never follow the light/dark scheme or
+> a runtime accent — the two things this system is built on. `bg-brand-600` was
+> a compile-time constant pretending to be a token.
+>
+> Tailwind still owns everything that genuinely never changes: **layout, spacing,
+> type**. Its own defaults (`text-white`, `bg-black/40`, `text-slate-500`) still
+> resolve — only the duplicate brand system was removed.
 
 ### 2.1 Primary / brand ramp — **Green (active default)**
 
@@ -159,14 +174,31 @@ Every tinted element is built from a 4-part recipe: `bg` + `border` + `tint` (ic
 | `textFaint` | `#94A3B8` | `#64748B` | Tertiary / disabled |
 | `scrim` | `rgba(15,23,42,0.45)` | `rgba(2,6,23,0.62)` | Modal backdrop |
 
-### 2.6 Tailwind-only palette (build-time classes — document, then migrate)
+### 2.6 Dark-mode tinting — `toneFor(tone, dark)`
 
-| Family | 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 |
-|--------|----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
-| `brand` (teal) | `#EFF7F5` | `#DFEFEB` | `#BFE0D7` | `#94CBBB` | `#64B39D` | `#389E81` | `#318B72` | `#29755F` | `#205C4B` | `#184236` |
-| `accent` (orange) | `#FDF4EF` | `#FAE7DC` | `#F6D0B9` | `#EFAD86` | `#E7884E` | `#E06216` | `#CA5814` | `#AA4A11` | `#863B0D` | `#652C0A` |
-| `plum` (violet) | `#F5F0F8` | `#EBE0F1` | `#D8C2E4` | `#B992CE` | `#975DB6` | `#73249D` | `#65208A` | `#551B74` | `#43155B` | `#300F42` |
-| `canvas` | `#F8FAFC` | | | | | | | | | |
+Every recipe in §2.4 is built from the **50 / 200 / 700** steps, which only work
+on a white canvas. `success/50` over `#0F172A` is a near-white slab that glows,
+and `success/700` on top of it is the one pairing in the system that fails
+contrast in dark mode.
+
+`toneFor()` (in `src/theme/colors.ts`) keeps the **hue** and rebuilds the recipe
+from the **500** step. In Figma this is a second mode on each surface variant —
+not a separate style.
+
+| Part | Light (as authored) | Dark (re-mixed) |
+|------|---------------------|-----------------|
+| `bg` | the 50 step | `tint` @ **16 %** alpha |
+| `border` | the 200 step | `tint` @ **32 %** alpha |
+| `tint` | the 500 step | unchanged |
+| `text` | the 700 step | **the 500 step** — the 700 does not clear 4.5:1 here |
+
+Applied automatically inside `Badge` and `IconWell`, so most callers get it for
+free. Screens that paint a tint by hand (leave/holiday date wells, document
+rows, asset cards) call it directly.
+
+> **Never flatten a tint to `fill` in dark mode.** An earlier build did, and it
+> threw away the signal: the date well on a leave card is the only thing saying
+> *approved / pending* from the left edge of the row.
 
 ---
 
@@ -752,7 +784,7 @@ top = safe-area + 24, bottom = safe-area + 24.
 | 1 | Logo | `assets/logo.png`, **200 × 180**, contain, centered, padding-bottom 40 |
 | 2 | Heading | "Welcome back" — Display **26 / 32**, `#0F172A`, centered |
 | 3 | Subhead | "Sign in to your account to continue." — UI Regular 14 / 20, `#64748B`, centered, margin-top 6 |
-| 4 | Error banner *(conditional)* | margin-top 20, radius 16, fill `accent/50` `#FDF4EF`, 1px `accent/200` `#F6D0B9`, padding 16 h / 14 v. Left: 16 × 16 circle `accent/500` `#E06216` with white "!" 10. Text UI Medium 13 / 20 `accent/700` `#AA4A11` |
+| 4 | Error banner *(conditional)* | margin-top 20, radius **18** (`radius.input`), fill `danger.bg` `#FEF2F2`, 1px `danger.border` `#FECACA`, padding 16 h / 14 v, gap 10, items-start. **AlertCircle 17** stroke 2.2 in `danger.tint` `#EF4444`. Text UI Medium 13 / 20 in `danger.text` `#B91C1C` |
 | 5 | "Email" label | UI Semibold 13, `#334155`, margin-top 28, margin-bottom 8 |
 | 6 | Email field | **h 56**, radius 16, white, 1px `neutral/200` → `brand/500` on focus, padding-x 16, text UI Medium 15 `#0F172A`, placeholder `neutral/400` |
 | 7 | "Password" label | as above, margin-top 20 |

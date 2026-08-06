@@ -1129,7 +1129,7 @@ export default function AttendanceScreen() {
         active="attendance"
         onSelect={(key) => {
           if (key === "home") navigation.goBack();
-          else if (key === "leaves") navigation.navigate("Leave" as never);
+          else if (key === "chat") navigation.navigate("Chats" as never);
           else if (key === "apply") navigation.navigate("LeaveApply" as never);
           else if (key === "profile") navigation.navigate("Profile" as never);
         }}

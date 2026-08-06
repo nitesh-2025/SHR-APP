@@ -1,4 +1,5 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   CalendarHeart,
   Check,
@@ -19,9 +20,11 @@ import {
   RefreshControl,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle, Path } from "react-native-svg";
 
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { BottomSheet } from "../components/BottomSheet";
@@ -42,6 +45,7 @@ import {
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useMenuNav } from "../navigation/useMenuNav";
 import {
   useCancelLeaveMutation,
   useGetMyBalanceQuery,
@@ -49,8 +53,15 @@ import {
   type Leave,
   type LeaveStatus,
 } from "../store/leaveApi";
-import { useGetHolidaysQuery, type Holiday } from "../store/workCalendarApi";
-import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { useGetHolidaysQuery } from "../store/workCalendarApi";
+import {
+  radius,
+  shadow,
+  space,
+  surface,
+  toneFor,
+  type Surface,
+} from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import {
@@ -63,6 +74,7 @@ import {
   WEEKDAYS_LONG,
   ymd,
 } from "../utils/date";
+import { resolveHolidays, type HolidayDate } from "../utils/holidays";
 
 const TYPE_LABEL: Record<string, string> = {
   sl: "Sick Leave",
@@ -82,12 +94,20 @@ const STATUS: Record<LeaveStatus, { label: string; tone: Surface }> = {
 /** `all` is not a status — it is the absence of the filter. */
 type StatusFilter = "all" | LeaveStatus;
 
-const FILTERS: { key: StatusFilter; label: string; color: string }[] = [
-  { key: "all", label: "All", color: surface.neutral.bg },
-  { key: "pending", label: "Pending", color: surface.warning.bg },
-  { key: "approved", label: "Approved", color: surface.success.bg },
-  { key: "rejected", label: "Rejected", color: surface.purple.bg },
-  { key: "cancelled", label: "Cancelled", color: surface.neutral.bg },
+/**
+ * Each chip carries its status's own colour as a DOT, never as its text.
+ *
+ * The label used to be painted in `surface.*.bg` — the 50-step tint, which is a
+ * near-white. On a white card that is white text on white: the row was five
+ * invisible chips with a visible count beside each one. The tint belongs on a
+ * 6px dot; the label belongs in an ink that can be read.
+ */
+const FILTERS: { key: StatusFilter; label: string; tone: Surface | null }[] = [
+  { key: "all", label: "All", tone: null },
+  { key: "pending", label: "Pending", tone: surface.warning },
+  { key: "approved", label: "Approved", tone: surface.success },
+  { key: "rejected", label: "Rejected", tone: surface.purple },
+  { key: "cancelled", label: "Cancelled", tone: surface.neutral },
 ];
 
 /** Years offered in the picker, newest first. */
@@ -99,59 +119,6 @@ type Tab = "requests" | "holidays";
 const TILE_WIDTH = 168;
 
 /* ── Holidays ─────────────────────────────────────────────────────────────── */
-
-/** A holiday master row resolved onto a real date in the year being viewed. */
-interface HolidayDate {
-  id: string;
-  name: string;
-  recurring: boolean;
-  date: Date;
-  /** `YYYY-MM-DD` — sortable and directly comparable against today. */
-  key: string;
-}
-
-/**
- * The holiday master → this year's calendar.
- *
- * A recurring holiday is stored as month + day with no year, so it only becomes
- * a DATE once you say which year you are looking at. A one-off carries its own
- * date and is dropped unless it falls in that year — otherwise stepping to 2025
- * would still list a 2026-only holiday.
- */
-function resolveHolidays(
-  list: Holiday[] | undefined,
-  year: number,
-): HolidayDate[] {
-  const out: HolidayDate[] = [];
-
-  for (const h of list ?? []) {
-    // `active: false` is how HR retires a holiday without deleting the history.
-    if (h.active === false) continue;
-
-    let date: Date | null = null;
-
-    if (h.recurring && h.month != null && h.day != null) {
-      // `month` is 1-based on the wire. Guarding the 0 case rather than
-      // subtracting blindly: one record stored 0-based would otherwise shift
-      // every holiday a month backwards, silently.
-      date = new Date(year, Math.max(0, h.month - 1), h.day);
-    } else if (h.date) {
-      const parsed = parseYmd(h.date);
-      if (parsed && parsed.getFullYear() === year) date = parsed;
-    }
-
-    if (!date || Number.isNaN(date.getTime())) continue;
-    out.push({
-      id: h._id,
-      name: h.name,
-      recurring: h.recurring,
-      date,
-      key: ymd(date),
-    });
-  }
-
-  return out.sort((a, b) => a.key.localeCompare(b.key));
-}
 
 /** Whole days from today. Negative = already passed. */
 function daysAway(key: string, todayKey: string): number {
@@ -182,8 +149,11 @@ function HolidayCard({
       ? surface.neutral
       : surface.info;
 
-  const wellBg = dark ? c.fill : tone.bg;
-  const wellInk = dark ? c.text : tone.text;
+  // Re-mixed rather than flattened to grey: the date well is the only thing
+  // saying "today / upcoming / gone" at a glance, and a dark scheme that drops
+  // every tint to `fill` throws that signal away. `toneFor` keeps the hue and
+  // swaps the recipe for one that survives on a dark canvas.
+  const well = toneFor(tone, dark);
 
   return (
     <View
@@ -199,18 +169,18 @@ function HolidayCard({
       className="flex-row items-center gap-3"
     >
       <View
-        style={{ backgroundColor: wellBg, borderRadius: radius.well - 2 }}
+        style={{ backgroundColor: well.bg, borderRadius: radius.well - 2 }}
         className="h-12 w-12 items-center justify-center"
       >
         <Text
-          style={{ color: wellInk }}
+          style={{ color: well.text }}
           className={T.cardTitle}
           allowFontScaling={false}
         >
           {String(item.date.getDate()).padStart(2, "0")}
         </Text>
         <Text
-          style={{ color: wellInk }}
+          style={{ color: well.text }}
           className={T.nano}
           allowFontScaling={false}
         >
@@ -276,6 +246,195 @@ function HolidayCard({
   );
 }
 
+/* ── Balance hero ─────────────────────────────────────────────────────────── */
+
+const HERO_HEIGHT = 168;
+
+/** Ring geometry. Small enough to share the row with the number it explains. */
+const RING = 86;
+const RING_STROKE = 8;
+
+/**
+ * Decorative arcs + horizon, same ornament as the apply screen's hero and the
+ * profile identity card — the three filled surfaces in the app read as one
+ * family rather than three one-off treatments.
+ */
+function HeroArt({ width, height }: { width: number; height: number }) {
+  return (
+    <View
+      style={{
+        pointerEvents: "none",
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+      }}
+    >
+      <Svg width={width} height={height}>
+        {[0.42, 0.6, 0.8].map((r, i) => (
+          <Circle
+            key={r}
+            cx={width * 0.92}
+            cy={height * 0.9}
+            r={width * r}
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth={1.2}
+            strokeOpacity={0.2 - i * 0.05}
+          />
+        ))}
+        <Path
+          d={`M0 ${height * 0.72} Q ${width * 0.3} ${height * 0.58} ${width * 0.62} ${height * 0.76} T ${width} ${height * 0.68}`}
+          stroke="#FFFFFF"
+          strokeOpacity={0.16}
+          strokeWidth={1.4}
+          fill="none"
+        />
+      </Svg>
+    </View>
+  );
+}
+
+/** One figure in the hero's footer strip. */
+function HeroFact({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-1 items-center">
+      <Text className={`text-white ${T.cardTitleSm}`} allowFontScaling={false}>
+        {value}
+      </Text>
+      <Text className={`mt-0.5 text-white/75 ${T.nano}`} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Total leave still available, as the one filled card on the screen.
+ *
+ * The ring shows CONSUMED, not remaining: a ring that empties as you take leave
+ * reads as a battery draining, which is the wrong story — the days were yours to
+ * spend. It fills as you use them.
+ */
+function BalanceHero({
+  totals,
+  pending,
+  width,
+}: {
+  totals: { allocated: number; used: number; available: number };
+  pending: number;
+  width: number;
+}) {
+  const { brand } = useTheme();
+
+  const pct =
+    totals.allocated > 0
+      ? Math.min(1, Math.max(0, totals.used / totals.allocated))
+      : 0;
+  const r = (RING - RING_STROKE) / 2;
+  const circumference = 2 * Math.PI * r;
+
+  return (
+    <LinearGradient
+      colors={[brand[600], brand[800]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        height: HERO_HEIGHT,
+        borderRadius: radius.card,
+        paddingHorizontal: space.xl,
+        paddingVertical: space.lg,
+        justifyContent: "space-between",
+        overflow: "hidden",
+        ...shadow.card,
+      }}
+    >
+      <HeroArt width={width} height={HERO_HEIGHT} />
+
+      <View className="flex-row items-center">
+        <View className="flex-1 pr-3">
+          <Text
+            className={`text-white/85 ${T.badge}`}
+            style={{ letterSpacing: 0.6 }}
+            allowFontScaling={false}
+          >
+            LEAVE BALANCE
+          </Text>
+
+          <View className="mt-1 flex-row items-baseline gap-2">
+            <Text className={`text-white ${T.kpiHero}`} allowFontScaling={false}>
+              {totals.available}
+            </Text>
+            <Text className={`text-white/85 ${T.cardTitle}`}>
+              {totals.available === 1 ? "day left" : "days left"}
+            </Text>
+          </View>
+
+          <Text className={`mt-0.5 text-white/75 ${T.secondary}`} numberOfLines={1}>
+            {pending > 0
+              ? `${pending} request${pending === 1 ? "" : "s"} awaiting approval`
+              : "Nothing waiting on your manager"}
+          </Text>
+        </View>
+
+        {/* Ring. Amber arc for the same reason the attendance hero uses one:
+            against a deep green fill it is the only accent that stays legible
+            without introducing a second status colour. */}
+        <View style={{ width: RING, height: RING }}>
+          <Svg width={RING} height={RING}>
+            <Circle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={r}
+              stroke="rgba(255,255,255,0.22)"
+              strokeWidth={RING_STROKE}
+              fill="none"
+            />
+            <Circle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={r}
+              stroke="#FBBF24"
+              strokeWidth={RING_STROKE}
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray={`${circumference}`}
+              strokeDashoffset={circumference * (1 - pct)}
+              // Start at 12 o'clock, sweep clockwise.
+              transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+            />
+          </Svg>
+          <View
+            style={{ position: "absolute", inset: 0 }}
+            className="items-center justify-center"
+          >
+            <Text className={`text-white ${T.kpiSm}`} allowFontScaling={false}>
+              {Math.round(pct * 100)}%
+            </Text>
+            <Text className={`text-white/75 ${T.nano}`}>used</Text>
+          </View>
+        </View>
+      </View>
+
+      <View
+        style={{ borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.2)" }}
+        className="flex-row items-center pt-3"
+      >
+        <HeroFact label="Allocated" value={String(totals.allocated)} />
+        <View
+          style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+          className="h-7 w-px"
+        />
+        <HeroFact label="Used" value={String(totals.used)} />
+        <View
+          style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+          className="h-7 w-px"
+        />
+        <HeroFact label="Pending" value={String(pending)} />
+      </View>
+    </LinearGradient>
+  );
+}
+
 /* ── Filter chip ──────────────────────────────────────────────────────────── */
 
 /**
@@ -290,17 +449,19 @@ function FilterChip({
   label,
   count,
   active,
-  btnColor,
+  tone,
   onPress,
 }: {
   label: string;
   count: number;
   active: boolean;
-  btnColor: string;
+  /** `null` for "All" — the absence of a filter has no status colour. */
+  tone: Surface | null;
   onPress: () => void;
 }) {
   const { c, brand, dark } = useTheme();
   const empty = count === 0 && !active;
+  const dot = tone ? toneFor(tone, dark).tint : null;
 
   return (
     <Pressable
@@ -311,21 +472,36 @@ function FilterChip({
       style={({ pressed }) => ({
         backgroundColor: active ? brand[600] : c.card,
         borderRadius: radius.pill,
-        borderWidth: active || dark ? 0 : 1,
+        borderWidth: active ? 0 : 1,
         borderColor: c.border,
-        opacity: pressed ? 0.75 : empty ? 0.5 : 1,
+        opacity: pressed ? 0.75 : empty ? 0.55 : 1,
       })}
-      className="h-9 flex-row items-center gap-1.5 px-3.5"
+      className="h-9 flex-row items-center gap-2 px-3.5"
     >
+      {dot ? (
+        <View
+          style={{
+            // On the accent fill the status dot goes white — its own hue
+            // against brand green is two saturated colours fighting in a 6px
+            // circle, and the chip is already telling you which status it is.
+            backgroundColor: active ? "rgba(255,255,255,0.9)" : dot,
+          }}
+          className="h-1.5 w-1.5 rounded-full"
+        />
+      ) : null}
+
       <Text
-        style={{ color: btnColor }}
+        style={{ color: active ? "#FFFFFF" : c.text }}
         className={T.badge}
         allowFontScaling={false}
       >
         {label}
       </Text>
+
       <Text
-        style={{ color: active ? "rgba(255,255,255,0.75)" : c.textFaint }}
+        style={{
+          color: active ? "rgba(255,255,255,0.75)" : c.textFaint,
+        }}
         className={T.count}
         allowFontScaling={false}
       >
@@ -394,8 +570,10 @@ function LeaveCard({
 
   // Dark mode drops the pastel fills — a tint that reads as "soft" on white
   // reads as "muddy" on a dark surface.
-  const wellBg = dark ? c.fill : status.tone.bg;
-  const wellInk = dark ? c.text : status.tone.text;
+  // Same reasoning as the holiday card: the well is what says "approved" from
+  // the left edge of the row, so dark mode re-mixes the tint instead of
+  // discarding it.
+  const well = toneFor(status.tone, dark);
 
   return (
     <View
@@ -413,18 +591,18 @@ function LeaveCard({
           pending from its left edge and the badge only confirms it. */}
       <View className="flex-row items-center gap-3">
         <View
-          style={{ backgroundColor: wellBg, borderRadius: radius.well - 2 }}
+          style={{ backgroundColor: well.bg, borderRadius: radius.well - 2 }}
           className="h-12 w-12 items-center justify-center"
         >
           <Text
-            style={{ color: wellInk }}
+            style={{ color: well.text }}
             className={T.cardTitle}
             allowFontScaling={false}
           >
             {from ? String(from.getDate()).padStart(2, "0") : "--"}
           </Text>
           <Text
-            style={{ color: wellInk }}
+            style={{ color: well.text }}
             className={T.nano}
             allowFontScaling={false}
           >
@@ -509,7 +687,7 @@ function LeaveCard({
       {leave.review_note ? (
         <View
           style={{
-            backgroundColor: dark ? c.fill : status.tone.bg,
+            backgroundColor: well.bg,
             borderRadius: radius.well - 4,
             padding: space.md,
           }}
@@ -518,14 +696,11 @@ function LeaveCard({
           <MessageSquareText
             size={13}
             strokeWidth={2}
-            color={dark ? c.textMuted : status.tone.tint}
+            color={well.tint}
             style={{ marginTop: 2 }}
           />
           <View className="flex-1">
-            <Text
-              style={{ color: dark ? c.textMuted : status.tone.text }}
-              className={T.nano}
-            >
+            <Text style={{ color: well.text }} className={T.nano}>
               {leave.reviewer_name || "Reviewer"}
             </Text>
             <Text style={{ color: c.text }} className={`mt-0.5 ${T.secondary}`}>
@@ -578,6 +753,7 @@ export default function LeaveScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { c, brand, primary } = useTheme();
+  const { width } = useWindowDimensions();
 
   const today = new Date();
   const todayKey = ymd(today);
@@ -634,6 +810,24 @@ export default function LeaveScreen() {
   );
 
   /**
+   * Every bucket added together — what the hero shows.
+   *
+   * Summed over whatever buckets the server actually sent rather than over a
+   * hardcoded `["sl", "el"]`: the day a third bucket is added, a fixed list
+   * would quietly under-report the balance instead of failing loudly.
+   */
+  const totals = useMemo(() => {
+    const sum = { allocated: 0, used: 0, available: 0 };
+    for (const b of Object.values(balance.data ?? {})) {
+      if (!b) continue;
+      sum.allocated += b.allocated ?? 0;
+      sum.used += b.used ?? 0;
+      sum.available += b.available ?? 0;
+    }
+    return sum;
+  }, [balance.data]);
+
+  /**
    * Month buckets, newest first. Only used while the period is the whole year —
    * with a month already picked, a header naming that same month is noise.
    */
@@ -673,6 +867,8 @@ export default function LeaveScreen() {
     { length: YEAR_SPAN },
     (_, i) => today.getFullYear() - i,
   );
+
+  const go = useMenuNav();
 
   const withdraw = async (leave: Leave) => {
     try {
@@ -874,8 +1070,29 @@ export default function LeaveScreen() {
           </>
         ) : (
           <>
-            {/* ── Balance ────────────────────────────────────────────────────── */}
-            <SectionHeader title="Leave Balance" />
+            {/* ── Balance hero ───────────────────────────────────────────────
+                One number answers the question people open this screen with:
+                how many days do I still have. The per-bucket tiles below break
+                it down, but a rail of two tiles as the FIRST thing on the page
+                made the answer something you had to assemble yourself. */}
+            {balance.isLoading ? (
+              <View style={{ paddingHorizontal: space.screen }}>
+                <Skeleton height={HERO_HEIGHT} radius={radius.card} />
+              </View>
+            ) : (
+              <View style={{ paddingHorizontal: space.screen }}>
+                <BalanceHero
+                  totals={totals}
+                  pending={counts.pending ?? 0}
+                  width={width - space.screen * 2}
+                />
+              </View>
+            )}
+
+            {/* ── By type ────────────────────────────────────────────────────── */}
+            <View style={{ paddingTop: space.xxl }}>
+              <SectionHeader title="By type" />
+            </View>
 
             <ScrollView
               horizontal
@@ -934,7 +1151,7 @@ export default function LeaveScreen() {
                   label={f.label}
                   count={counts[f.key] ?? 0}
                   active={status === f.key}
-                  btnColor={f.color}
+                  tone={f.tone}
                   onPress={() => setStatus(f.key)}
                 />
               ))}
@@ -1052,15 +1269,9 @@ export default function LeaveScreen() {
         <Text className="font-ui-semibold text-[14.5px] text-white">Leave</Text>
       </Pressable>
 
-      <BottomNav
-        active="leaves"
-        onSelect={(key) => {
-          if (key === "home") navigation.navigate("Dashboard");
-          else if (key === "attendance") navigation.navigate("Attendance");
-          else if (key === "apply") navigation.navigate("LeaveApply");
-          else if (key === "profile") navigation.navigate("Profile");
-        }}
-      />
+      {/* No tab of its own — Leave is reached from the rail and the drawer, so
+          nothing in the bar should light up while you are here. */}
+      <BottomNav active={null} onSelect={go} />
 
       {/* ── Withdraw confirmation ────────────────────────────────────────
           Withdrawing is irreversible and returns days to the balance — a tap

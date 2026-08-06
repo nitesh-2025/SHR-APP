@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   LifeBuoy,
   Receipt,
+  Target,
   Users,
   UsersRound,
   type LucideIcon,
@@ -95,11 +96,17 @@ const ACTIONS: Action[] = [
   },
   {
     key: "payslip",
-    label: "Payslip",
-    hint: "View salary",
+    label: "Salary",
+    hint: "Package and deductions",
     icon: Receipt,
     tone: surface.neutral,
-    soon: true,
+  },
+  {
+    key: "performance",
+    label: "Performance",
+    hint: "Your reviews",
+    icon: Target,
+    tone: surface.success,
   },
   {
     key: "tickets",
@@ -107,7 +114,6 @@ const ACTIONS: Action[] = [
     hint: "Raise an issue",
     icon: LifeBuoy,
     tone: surface.info,
-    soon: true,
   },
   {
     key: "calendar",
@@ -115,23 +121,13 @@ const ACTIONS: Action[] = [
     hint: "Holidays",
     icon: CalendarDays,
     tone: surface.success,
-    soon: true,
-  },
-  {
-    key: "meeting",
-    label: "Meetings",
-    hint: "Your schedule",
-    icon: Users,
-    tone: surface.warning,
-    soon: true,
   },
   {
     key: "asset",
     label: "Assets",
-    hint: "Request gear",
+    hint: "What you hold",
     icon: Boxes,
     tone: surface.purple,
-    soon: true,
   },
   {
     key: "policy",
@@ -139,6 +135,16 @@ const ACTIONS: Action[] = [
     hint: "Read the rules",
     icon: BookText,
     tone: surface.info,
+  },
+  // Meetings stays last and stays flagged: there is no calendar/meeting
+  // endpoint on the backend at all, and a screen built on a guess is worse
+  // than a card that says why it does nothing.
+  {
+    key: "meeting",
+    label: "Meetings",
+    hint: "Your schedule",
+    icon: Users,
+    tone: surface.warning,
     soon: true,
   },
   {

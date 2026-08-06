@@ -21,12 +21,14 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dismiss, useToasts, type ToastItem, type ToastKind } from '../lib/toast';
-import { toastPalette } from '../lib/toastTheme';
+import { toastBadgeInk, toastPalette } from '../lib/toastTheme';
 
 /** Fraction of screen width a swipe must cross to count as a dismiss. */
 const SWIPE_RATIO = 0.26;
 /** A flick past this velocity dismisses regardless of distance travelled. */
 const SWIPE_VELOCITY = 650;
+/** Upward travel that counts as "put it back" — shorter than the sideways trip. */
+const SWIPE_UP = 44;
 
 const ENTER_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
 const EXIT_MS = 170;
@@ -61,12 +63,15 @@ function ToastRow({ item }: { item: ToastItem }) {
   const { width } = useWindowDimensions();
   const isDark = useColorScheme() === 'dark';
   const palette = useMemo(() => toastPalette(item.kind, isDark), [item.kind, isDark]);
+  const badgeInk = useMemo(() => toastBadgeInk(item.kind, isDark), [item.kind, isDark]);
   const Icon = ICONS[item.kind];
 
   // `enter` drives opacity/scale/Y together so one spring governs the whole
   // arrival rather than three animations drifting out of sync.
   const enter = useSharedValue(0);
   const translateX = useSharedValue(0);
+  /** Live finger offset on the vertical axis, kept apart from the enter track. */
+  const dragY = useSharedValue(0);
   const leaving = useSharedValue(0);
 
   // Remaining fraction of the auto-dismiss window, 1 → 0. Doubles as the
@@ -121,21 +126,36 @@ function ToastRow({ item }: { item: ToastItem }) {
     if (!leaving.value) startTimer(progress.value);
   }, [leaving, progress, startTimer]);
 
-  // Horizontal drag only: `activeOffsetX` stops the toast from stealing a
-  // vertical scroll that merely began on top of it.
+  /**
+   * Sideways OR up.
+   *
+   * A banner that entered from the top is dismissed by pushing it back where it
+   * came from — that is the gesture people already try first, and it used to do
+   * nothing here. Downward is deliberately NOT a dismiss: dragging a top banner
+   * down means "show me more" everywhere else on the platform, so it springs
+   * back instead of vanishing.
+   *
+   * `activeOffsetX/Y` still stop the toast from stealing a scroll that merely
+   * began underneath it.
+   */
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
-    .failOffsetY([-14, 14])
+    .activeOffsetY([-12, 12])
     .onBegin(() => {
       scheduleOnRN(pause);
     })
     .onChange((e) => {
       translateX.value = e.translationX;
+      // Rubber-band anything downward — it is not a dismissal direction.
+      dragY.value = e.translationY < 0 ? e.translationY : e.translationY * 0.25;
     })
     .onEnd((e) => {
-      const past = Math.abs(e.translationX) > width * SWIPE_RATIO;
-      const flicked = Math.abs(e.velocityX) > SWIPE_VELOCITY;
-      if (past || flicked) {
+      const sideways =
+        Math.abs(e.translationX) > width * SWIPE_RATIO ||
+        Math.abs(e.velocityX) > SWIPE_VELOCITY;
+      const upward = e.translationY < -SWIPE_UP || e.velocityY < -SWIPE_VELOCITY;
+
+      if (sideways) {
         leaving.value = 1;
         const dir =
           e.translationX === 0 ? Math.sign(e.velocityX) : Math.sign(e.translationX);
@@ -143,10 +163,21 @@ function ToastRow({ item }: { item: ToastItem }) {
           if (done) scheduleOnRN(remove);
         });
         enter.value = withTiming(0, { duration: 160 });
-      } else {
-        translateX.value = withSpring(0, ENTER_SPRING);
-        scheduleOnRN(resume);
+        return;
       }
+
+      if (upward) {
+        leaving.value = 1;
+        dragY.value = withTiming(-160, { duration: 170 }, (done) => {
+          if (done) scheduleOnRN(remove);
+        });
+        enter.value = withTiming(0, { duration: 170 });
+        return;
+      }
+
+      translateX.value = withSpring(0, ENTER_SPRING);
+      dragY.value = withSpring(0, ENTER_SPRING);
+      scheduleOnRN(resume);
     })
     .onFinalize(() => {
       scheduleOnRN(resume);
@@ -157,7 +188,7 @@ function ToastRow({ item }: { item: ToastItem }) {
     transform: [
       { translateX: translateX.value },
       // -14 → 0 on the way in; the same track runs backwards on the way out.
-      { translateY: (1 - enter.value) * -14 },
+      { translateY: (1 - enter.value) * -14 + dragY.value },
       { scale: 0.97 + enter.value * 0.03 },
     ],
   }));
@@ -183,53 +214,53 @@ function ToastRow({ item }: { item: ToastItem }) {
           onPressIn={pause}
           onPressOut={resume}
           accessibilityRole="button"
-          accessibilityHint="Tap or swipe sideways to dismiss"
+          accessibilityHint="Tap, or swipe up or sideways, to dismiss"
           style={{
             backgroundColor: palette.surface,
             borderColor: palette.border,
             borderWidth: 1,
-            borderRadius: 16,
+            // A 20px radius against a 60px-tall card is the proportion every
+            // current mobile toast lands on — Sonner, react-hot-toast, the iOS
+            // system banner. At 16 the card read as a dialog fragment.
+            borderRadius: 20,
             shadowColor: palette.shadow,
             shadowOpacity: palette.shadowOpacity,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 4,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 8,
             overflow: 'hidden',
           }}
         >
-          {/* Full-height accent edge. A neutral card alone was too quiet to
-              register at a glance; this restores an unmistakable type signal
-              for 4px of width, instead of tinting the whole surface. */}
-          <View
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 4,
-              backgroundColor: palette.accent,
-            }}
-          />
-
-          {/* Bare icon — the tinted circle behind it was extra visual weight
-              carrying no extra information. */}
           <View
             style={{
               flexDirection: 'row',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               paddingVertical: 12,
-              paddingLeft: 15,
+              paddingLeft: 12,
               paddingRight: 8,
             }}
           >
-            <View style={{ marginTop: 1 }}>
-              <Icon size={17} strokeWidth={2.2} color={palette.accent} />
+            {/* Solid disc, white glyph — the "rich colors" treatment.
+                The old build drew a bare accent-coloured icon plus a 4px edge
+                stripe: two half-signals. One saturated 34px disc is read before
+                the text is, which is the whole job of a toast. */}
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: palette.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon size={19} strokeWidth={2.4} color={badgeInk} />
             </View>
 
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 14, lineHeight: 19, color: palette.title }}
+                style={{ fontSize: 14.5, lineHeight: 20, color: palette.title }}
                 className="font-ui-semibold"
               >
                 {item.message}
@@ -257,29 +288,43 @@ function ToastRow({ item }: { item: ToastItem }) {
               accessibilityLabel="Dismiss notification"
               android_ripple={{ color: palette.track, borderless: true, radius: 16 }}
               style={({ pressed }) => ({
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: pressed ? 0.4 : 1,
               })}
             >
-              <X size={14} strokeWidth={2.3} color={palette.close} />
+              <X size={15} strokeWidth={2.3} color={palette.close} />
             </Pressable>
           </View>
 
-          {/* Progress bar. `scaleX` with a left transform-origin animates on the
-              UI thread; animating `width` would hit the layout system instead
-              and drop frames. */}
+          {/* Countdown. Inset and rounded rather than a full-bleed 2px rule at
+              the very bottom edge — flush against a 20px corner the old bar was
+              clipped into two stubs.
+
+              `scaleX` with a left transform-origin animates on the UI thread;
+              animating `width` would hit the layout system and drop frames. */}
           {item.duration ? (
-            <View style={{ height: 2, backgroundColor: palette.track }}>
+            <View
+              style={{
+                height: 3,
+                marginHorizontal: 12,
+                marginBottom: 9,
+                borderRadius: 999,
+                backgroundColor: palette.track,
+                overflow: 'hidden',
+              }}
+            >
               <Animated.View
                 style={[
                   {
-                    height: 2,
+                    height: 3,
                     width: '100%',
+                    borderRadius: 999,
                     backgroundColor: palette.accent,
-                    opacity: 0.85,
+                    opacity: 0.9,
                     transformOrigin: 'left',
                   },
                   barStyle,

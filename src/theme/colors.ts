@@ -202,6 +202,38 @@ export const surface = {
   muted: { bg: neutral[50], border: neutral[200], tint: neutral[300], text: neutral[400] },
 } satisfies Record<string, Surface>;
 
+/* ── Dark-mode tinting ───────────────────────────────────────────────────── */
+
+/** `#22C55E` → `rgba(34,197,94,a)`. Non-hex input is returned untouched. */
+export function withAlpha(hex: string, a: number): string {
+  const m = /^#?([\da-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/**
+ * Scheme-correct version of a `Surface`.
+ *
+ * The `surface.*` recipes above are built from the 50/200/700 steps, which only
+ * work on a white canvas: `success[50]` over `#0F172A` is a near-white slab that
+ * glows, and `success[700]` on top of it is the one pairing in the whole system
+ * that fails contrast in dark mode. In dark we keep the SAME hue but rebuild the
+ * chip from the 500 step — a low-alpha wash of the accent for the fill, the
+ * accent itself for the ink. Same meaning, same family, no glare.
+ */
+export function toneFor(tone: Surface, dark: boolean): Surface {
+  if (!dark) return tone;
+  return {
+    bg: withAlpha(tone.tint, 0.16),
+    border: withAlpha(tone.tint, 0.32),
+    tint: tone.tint,
+    // 500-step colour on a 16% wash of itself over the dark canvas clears 4.5:1;
+    // the 700 step (the light-mode ink) does not.
+    text: tone.tint,
+  };
+}
+
 /* ── Type scale ──────────────────────────────────────────────────────────── */
 
 /**
