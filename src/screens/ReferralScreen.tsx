@@ -40,7 +40,7 @@ import {
   type CandidateStage,
   type Job,
 } from '../store/recruitmentApi';
-import { radius, shadow, space, surface, type Surface } from '../theme/colors';
+import { radius, shadow, space, surface, toneFor, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
 import { fmtDayShort } from '../utils/date';
@@ -348,6 +348,11 @@ export default function ReferralScreen() {
   );
   const [createCandidate, { isLoading: submitting }] = useCreateCandidateMutation();
 
+  // The pitch panel is the one tinted surface on this tab; swapping it for a
+  // plain card in dark mode left it indistinguishable from the job cards under
+  // it. `toneFor` keeps the brand tint on a dark canvas instead.
+  const pitch = toneFor(primary, dark);
+
   const openRoles = useMemo(() => {
     const all = jobs.data?.items ?? [];
     const q = query.trim().toLowerCase();
@@ -523,10 +528,10 @@ export default function ReferralScreen() {
               style={{
                 marginHorizontal: space.screen,
                 marginBottom: space.lg,
-                backgroundColor: dark ? c.card : primary.bg,
+                backgroundColor: pitch.bg,
                 borderRadius: radius.card - 4,
                 borderWidth: 1,
-                borderColor: dark ? c.border : primary.border,
+                borderColor: pitch.border,
                 padding: space.lg,
               }}
               className="flex-row items-center gap-3"
