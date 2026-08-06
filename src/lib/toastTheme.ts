@@ -57,6 +57,20 @@ const ACCENT_DARK: Record<ToastKind, string> = {
   info: '#60A5FA',
 };
 
+/**
+ * The glyph sits in a solid disc of the accent colour, white icon on top —
+ * `badgeInk` is that white, kept as a token because on the lifted dark accents
+ * (`#FBBF24` amber in particular) white is not the readable choice: a near-black
+ * glyph is. One place decides it, so the amber toast is never the one that
+ * quietly fails contrast.
+ */
+export function toastBadgeInk(kind: ToastKind, isDark: boolean): string {
+  if (isDark && (kind === 'warning' || kind === 'success' || kind === 'info')) {
+    return '#0B1120';
+  }
+  return '#FFFFFF';
+}
+
 export function toastPalette(kind: ToastKind, isDark: boolean): ToastPalette {
   const base = isDark ? NEUTRAL_DARK : NEUTRAL_LIGHT;
   return { ...base, accent: (isDark ? ACCENT_DARK : ACCENT_LIGHT)[kind] };
