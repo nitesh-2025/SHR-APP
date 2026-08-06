@@ -1,6 +1,17 @@
 import { useNavigation } from '@react-navigation/native';
-import { AlertCircle, Check, Send } from 'lucide-react-native';
-import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  AlertCircle,
+  CalendarRange,
+  Check,
+  HeartPulse,
+  Send,
+  Sparkles,
+  TreePalm,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react-native';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,12 +20,14 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DateField } from '../components/DateField';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Card } from '../components/ui';
+import { Button } from '../components/ui';
 import { describeApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import {
@@ -23,41 +36,126 @@ import {
   LEAVE_TYPES,
   type LeaveType,
 } from '../store/leaveApi';
-import { radius, space, surface } from '../theme/colors';
+import { radius, shadow, space, surface, toneFor } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
-import { daysBetween, parseYmd, ymd } from '../utils/date';
+import { T } from '../theme/type';
+import { daysBetween, fmtDayShort, parseYmd, ymd } from '../utils/date';
 
-const TYPE_LABEL: Record<LeaveType, string> = {
-  sl: 'Sick / Emergency',
-  el: 'Earned',
-  unpaid: 'Unpaid',
+/* ── Leave types ──────────────────────────────────────────────────────────── */
+
+/**
+ * The three buckets, as rows rather than as a segmented strip.
+ *
+ * "Sick / Emergency" is 16 characters; three of those across a 360 dp screen
+ * left each pill ~104 px wide and every label truncated to "Sick / Emer…". A
+ * row has the width to say what the bucket IS, and — more usefully — what is
+ * left in it, which is the number that decides which one you pick.
+ */
+const TYPES: {
+  key: LeaveType;
+  label: string;
+  blurb: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: 'sl',
+    label: 'Sick / Emergency',
+    blurb: 'Unwell, or something urgent came up',
+    icon: HeartPulse,
+  },
+  {
+    key: 'el',
+    label: 'Earned',
+    blurb: 'Planned time off from your accrued days',
+    icon: TreePalm,
+  },
+  {
+    key: 'unpaid',
+    label: 'Unpaid',
+    blurb: 'Beyond your balance — deducted from salary',
+    icon: Wallet,
+  },
+];
+
+/** Openers, not answers — a tap fills the box and the cursor carries on. */
+const PROMPTS: Record<LeaveType, string[]> = {
+  sl: ['Not well — fever', 'Doctor appointment', 'Family emergency'],
+  el: ['Personal work', 'Family function', 'Travelling'],
+  unpaid: ['Personal work', 'Extended travel', 'Family commitment'],
 };
 
-/** Field wrapper — label above, filled control below, validation underneath. */
-function Field({
-  label,
-  children,
-  hint,
-}: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  const { c } = useTheme();
+const REASON_MAX = 300;
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * Concentric arcs sweeping out of the card's corner — the same ornament the
+ * profile identity card carries, so the two filled cards in the app read as one
+ * family. Drawn in white at low opacity: on a deep green fill it registers as
+ * texture, never as a second object competing with the number.
+ */
+function HeroArt({ width, height }: { width: number; height: number }) {
   return (
-    <View style={{ gap: space.sm }}>
-      <Text style={{ color: c.textMuted }} className="font-ui-semibold text-[13px]">
-        {label}
-      </Text>
-      {children}
-      {hint ? (
-        <Text style={{ color: c.textFaint }} className="font-ui-regular text-[11.5px]">
-          {hint}
-        </Text>
-      ) : null}
+    <View
+      style={{ pointerEvents: 'none', position: 'absolute', inset: 0, overflow: 'hidden' }}
+    >
+      <Svg width={width} height={height}>
+        {[0.42, 0.6, 0.8].map((r, i) => (
+          <Circle
+            key={r}
+            cx={width * 0.92}
+            cy={height * 0.9}
+            r={width * r}
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth={1.2}
+            strokeOpacity={0.2 - i * 0.05}
+          />
+        ))}
+        {/* A single horizon curve across the lower third. It is what stops the
+            card from reading as a plain gradient rectangle. */}
+        <Path
+          d={`M0 ${height * 0.74} Q ${width * 0.3} ${height * 0.6} ${width * 0.62} ${height * 0.78} T ${width} ${height * 0.7}`}
+          stroke="#FFFFFF"
+          strokeOpacity={0.16}
+          strokeWidth={1.4}
+          fill="none"
+        />
+      </Svg>
     </View>
   );
 }
+
+/* ── Field wrapper ────────────────────────────────────────────────────────── */
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  const { c } = useTheme();
+  return (
+    <View style={{ gap: space.md }}>
+      <View className="flex-row items-baseline justify-between">
+        <Text style={{ color: c.text }} className={T.cardTitle}>
+          {label}
+        </Text>
+        {hint ? (
+          <Text style={{ color: c.textMuted }} className={T.caption} numberOfLines={1}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/* ── Screen ───────────────────────────────────────────────────────────────── */
 
 /**
  * Leave application. A pushed screen, not a sheet — it carries a date picker
@@ -67,7 +165,8 @@ function Field({
 export default function LeaveApplyScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { c, brand, dark } = useTheme();
+  const { c, brand, dark, primary } = useTheme();
+  const { width } = useWindowDimensions();
 
   const today = ymd(new Date());
   const [type, setType] = useState<LeaveType>('sl');
@@ -86,6 +185,15 @@ export default function LeaveApplyScreen() {
   const available = type === 'unpaid' ? null : (balance.data?.[type]?.available ?? 0);
   const short = available !== null && days > available;
 
+  const heroWidth = width - space.screen * 2;
+  const heroHeight = 148;
+
+  const spanLabel = useMemo(() => {
+    if (halfDay) return `${fmtDayShort(from)} · half day`;
+    if (from === to) return fmtDayShort(from);
+    return `${fmtDayShort(from)} → ${fmtDayShort(to)}`;
+  }, [from, to, halfDay]);
+
   const onSubmit = async () => {
     setError('');
 
@@ -98,9 +206,8 @@ export default function LeaveApplyScreen() {
       return;
     }
     if (short) {
-      setError(
-        `You have ${available} day(s) of ${TYPE_LABEL[type]} left, but requested ${days}.`,
-      );
+      const label = TYPES.find((t) => t.key === type)?.label ?? type;
+      setError(`You have ${available} day(s) of ${label} left, but requested ${days}.`);
       return;
     }
 
@@ -119,13 +226,12 @@ export default function LeaveApplyScreen() {
     }
   };
 
+  const danger = toneFor(surface.danger, dark);
+  const warn = toneFor(surface.warning, dark);
+
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
-      <ScreenHeader
-        title="Apply for Leave"
-        subtitle={`${days} ${days === 1 ? 'day' : 'days'} selected`}
-        onBack={() => navigation.goBack()}
-      />
+      <ScreenHeader title="Apply for Leave" onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView
         className="flex-1"
@@ -134,58 +240,252 @@ export default function LeaveApplyScreen() {
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: space.screen,
-            paddingBottom: insets.bottom + 120,
-            gap: space.xl,
+            paddingBottom: insets.bottom + 130,
+            gap: space.xxl,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* ── Hero ───────────────────────────────────────────────────────
+              The one filled surface on the form. It answers, at a glance, the
+              only question the whole screen is asking: how many days, on which
+              dates, and is that within what you have. */}
+          <LinearGradient
+            colors={[brand[600], brand[800]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              height: heroHeight,
+              borderRadius: radius.card,
+              paddingHorizontal: space.xl,
+              justifyContent: 'center',
+              overflow: 'hidden',
+              ...shadow.card,
+            }}
+          >
+            <HeroArt width={heroWidth} height={heroHeight} />
+
+            <View className="flex-row items-center">
+              <View className="flex-1 pr-3">
+                <Text
+                  className={`text-white/85 ${T.badge}`}
+                  style={{ letterSpacing: 0.6 }}
+                  allowFontScaling={false}
+                >
+                  YOU&apos;RE REQUESTING
+                </Text>
+
+                <View className="mt-1.5 flex-row items-baseline gap-2">
+                  <Text
+                    className={`text-white ${T.kpiHero}`}
+                    allowFontScaling={false}
+                  >
+                    {days}
+                  </Text>
+                  <Text className={`text-white/85 ${T.cardTitle}`}>
+                    {days === 1 ? 'day' : 'days'}
+                  </Text>
+                </View>
+
+                <Text className={`mt-1 text-white/80 ${T.secondary}`} numberOfLines={1}>
+                  {spanLabel}
+                </Text>
+              </View>
+
+              {/* Balance side. `unpaid` has no bucket to draw down, and showing
+                  a zero there would read as "you have none left" rather than
+                  "this one is not counted". */}
+              <View
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.16)',
+                  borderRadius: radius.well,
+                  minWidth: 92,
+                }}
+                className="items-center px-3 py-2.5"
+              >
+                {available === null ? (
+                  <>
+                    <Wallet size={18} strokeWidth={2} color="#FFFFFF" />
+                    <Text className={`mt-1 text-center text-white/85 ${T.nano}`}>
+                      Not counted{'\n'}against balance
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      className={`text-white ${T.kpiSm}`}
+                      allowFontScaling={false}
+                    >
+                      {available}
+                    </Text>
+                    <Text className={`text-white/85 ${T.nano}`}>days left</Text>
+                  </>
+                )}
+              </View>
+            </View>
+          </LinearGradient>
+
+          {/* ── Errors and warnings ────────────────────────────────────────
+              The shortfall warns BEFORE submit — finding out you are two days
+              over only after tapping Send is a wasted round trip. */}
           {error ? (
             <View
-              style={{ backgroundColor: surface.danger.bg, borderRadius: radius.card }}
+              style={{
+                backgroundColor: danger.bg,
+                borderRadius: radius.well,
+                borderWidth: 1,
+                borderColor: danger.border,
+              }}
               className="flex-row items-start gap-2.5 px-4 py-3"
             >
-              <AlertCircle size={17} strokeWidth={2} color={surface.danger.tint} />
-              <Text
-                style={{ color: surface.danger.text }}
-                className="flex-1 font-ui text-[13px] leading-5"
-              >
+              <AlertCircle size={17} strokeWidth={2} color={danger.tint} />
+              <Text style={{ color: danger.text }} className={`flex-1 leading-5 ${T.body}`}>
                 {error}
+              </Text>
+            </View>
+          ) : short ? (
+            <View
+              style={{
+                backgroundColor: warn.bg,
+                borderRadius: radius.well,
+                borderWidth: 1,
+                borderColor: warn.border,
+              }}
+              className="flex-row items-start gap-2.5 px-4 py-3"
+            >
+              <AlertCircle size={17} strokeWidth={2} color={warn.tint} />
+              <Text style={{ color: warn.text }} className={`flex-1 leading-5 ${T.body}`}>
+                {days} days requested but only {available} left in this bucket. Shorten
+                the range, or apply as Unpaid.
               </Text>
             </View>
           ) : null}
 
-          {/* ── Type ─────────────────────────────────────────────────────── */}
-          <Field
-            label="Leave type"
-            hint={available !== null ? `${available} day(s) available in this bucket.` : undefined}
-          >
-            <View className="flex-row" style={{ gap: space.sm }}>
-              {LEAVE_TYPES.map((t) => {
-                const active = t === type;
+          {/* ── Type ───────────────────────────────────────────────────────── */}
+          <Field label="Leave type">
+            <View style={{ gap: space.md }}>
+              {LEAVE_TYPES.map((key) => {
+                const spec = TYPES.find((t) => t.key === key)!;
+                const Icon = spec.icon;
+                const active = key === type;
+                const left = key === 'unpaid' ? null : balance.data?.[key]?.available;
+
                 return (
                   <Pressable
-                    key={t}
-                    onPress={() => setType(t)}
-                    accessibilityRole="button"
+                    key={key}
+                    onPress={() => setType(key)}
+                    accessibilityRole="radio"
                     accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${spec.label}. ${
+                      left == null ? 'Not counted against balance' : `${left} days left`
+                    }`}
+                    style={({ pressed }) => ({
+                      backgroundColor: active ? primary.bg : c.card,
+                      borderRadius: radius.card - 4,
+                      borderWidth: active ? 1.5 : 1,
+                      borderColor: active ? brand[600] : c.border,
+                      padding: space.lg,
+                      opacity: pressed ? 0.85 : 1,
+                      ...(dark || active ? shadow.none : shadow.soft),
+                    })}
+                    className="flex-row items-center gap-3"
+                  >
+                    <View
+                      style={{
+                        backgroundColor: active ? brand[600] : c.fill,
+                        borderRadius: radius.well - 2,
+                      }}
+                      className="h-11 w-11 items-center justify-center"
+                    >
+                      <Icon
+                        size={20}
+                        strokeWidth={2.1}
+                        color={active ? '#FFFFFF' : c.textMuted}
+                      />
+                    </View>
+
+                    <View className="flex-1">
+                      <Text
+                        style={{ color: active && !dark ? brand[700] : c.text }}
+                        className={T.cardTitleSm}
+                        numberOfLines={1}
+                      >
+                        {spec.label}
+                      </Text>
+                      <Text
+                        style={{ color: c.textMuted }}
+                        className={`mt-0.5 ${T.micro}`}
+                        numberOfLines={1}
+                      >
+                        {left == null ? spec.blurb : `${left} day(s) available`}
+                      </Text>
+                    </View>
+
+                    {/* A radio, not a checkbox — one bucket at a time. */}
+                    <View
+                      style={{
+                        borderColor: active ? brand[600] : c.border,
+                        backgroundColor: active ? brand[600] : 'transparent',
+                      }}
+                      className="h-[22px] w-[22px] items-center justify-center rounded-full border-2"
+                    >
+                      {active ? <Check size={13} strokeWidth={3} color="#FFFFFF" /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Field>
+
+          {/* ── Duration ────────────────────────────────────────────────────
+              A two-way switch instead of the old "Half day" checkbox: the
+              choice is between two named things, and a lone checkbox made
+              "full day" the unlabelled absence of the other one. */}
+          <Field label="Duration">
+            <View
+              style={{ backgroundColor: c.fill, borderRadius: radius.input, padding: 4 }}
+              className="flex-row"
+              accessibilityRole="radiogroup"
+            >
+              {[
+                { key: false, label: 'Full day', hint: 'One or more whole days' },
+                { key: true, label: 'Half day', hint: 'Counts as 0.5' },
+              ].map((opt) => {
+                const active = halfDay === opt.key;
+                return (
+                  <Pressable
+                    key={String(opt.key)}
+                    onPress={() => setHalfDay(opt.key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${opt.label}. ${opt.hint}`}
                     style={({ pressed }) => ({
                       flex: 1,
-                      height: 46,
-                      borderRadius: radius.input,
-                      backgroundColor: active ? brand[600] : c.card,
-                      borderWidth: dark || active ? 0 : 1,
-                      borderColor: c.border,
+                      borderRadius: radius.input - 4,
+                      // A white chip on a dark track is a hole punched in the
+                      // surface; dark mode fills the thumb with the accent.
+                      backgroundColor: active ? (dark ? brand[600] : c.card) : 'transparent',
                       opacity: pressed ? 0.8 : 1,
+                      paddingVertical: space.md,
+                      ...(active && !dark ? shadow.soft : shadow.none),
                     })}
-                    className="items-center justify-center px-2"
+                    className="items-center"
                   >
                     <Text
-                      style={{ color: active ? '#FFFFFF' : c.textMuted }}
-                      className="font-ui-semibold text-[12.5px]"
-                      numberOfLines={1}
+                      style={{
+                        color: active ? (dark ? '#FFFFFF' : c.text) : c.textMuted,
+                      }}
+                      className={T.cardTitleSm}
                     >
-                      {TYPE_LABEL[t]}
+                      {opt.label}
+                    </Text>
+                    <Text
+                      style={{
+                        color: active && dark ? 'rgba(255,255,255,0.8)' : c.textFaint,
+                      }}
+                      className={`mt-0.5 ${T.nano}`}
+                    >
+                      {opt.hint}
                     </Text>
                   </Pressable>
                 );
@@ -193,69 +493,66 @@ export default function LeaveApplyScreen() {
             </View>
           </Field>
 
-          {/* ── Dates ────────────────────────────────────────────────────── */}
-          <View className="flex-row" style={{ gap: space.md }}>
-            <DateField
-              label={halfDay ? 'Date' : 'From'}
-              value={from}
-              onChange={(next) => {
-                setFrom(next);
-                // Keep the range valid without making the user fix it by hand.
-                if (parseYmd(to)! < parseYmd(next)!) setTo(next);
-              }}
-            />
-            {halfDay ? null : (
-              <DateField label="To" value={to} onChange={setTo} min={from} />
-            )}
-          </View>
-
-          {/* ── Half day ─────────────────────────────────────────────────── */}
-          <Pressable
-            onPress={() => setHalfDay((h) => !h)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: halfDay }}
-            accessibilityLabel="Half day"
+          {/* ── Dates ──────────────────────────────────────────────────────── */}
+          <Field
+            label={halfDay ? 'Date' : 'Dates'}
+            hint={halfDay ? undefined : `${days} ${days === 1 ? 'day' : 'days'}`}
           >
-            <Card style={{ padding: space.lg }}>
-              <View className="flex-row items-center" style={{ gap: space.md }}>
-                <View
-                  style={{
-                    backgroundColor: halfDay ? brand[600] : 'transparent',
-                    borderColor: halfDay ? brand[600] : c.border,
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: radius.card - 4,
+                borderWidth: 1,
+                borderColor: c.border,
+                padding: space.lg,
+                ...(dark ? shadow.none : shadow.soft),
+              }}
+            >
+              <View className="flex-row" style={{ gap: space.md }}>
+                <DateField
+                  label={halfDay ? 'Date' : 'From'}
+                  value={from}
+                  onChange={(next) => {
+                    setFrom(next);
+                    // Keep the range valid without making the user fix it by hand.
+                    if (parseYmd(to)! < parseYmd(next)!) setTo(next);
                   }}
-                  className="h-[22px] w-[22px] items-center justify-center rounded-md border-2"
-                >
-                  {halfDay ? <Check size={13} strokeWidth={3} color="#FFFFFF" /> : null}
-                </View>
-                <View className="flex-1">
-                  <Text style={{ color: c.text }} className="font-ui-semibold text-[14px]">
-                    Half day
-                  </Text>
-                  <Text
-                    style={{ color: c.textMuted }}
-                    className="font-ui-regular text-[12px]"
-                  >
-                    Counts as 0.5 against your balance.
-                  </Text>
-                </View>
+                />
+                {halfDay ? null : (
+                  <DateField label="To" value={to} onChange={setTo} min={from} />
+                )}
               </View>
-            </Card>
-          </Pressable>
 
-          {/* ── Reason ───────────────────────────────────────────────────── */}
-          <Field label="Reason">
+              {halfDay ? null : (
+                <View className="mt-3 flex-row items-center gap-2">
+                  <CalendarRange size={13} strokeWidth={2} color={c.textFaint} />
+                  <Text style={{ color: c.textFaint }} className={T.micro}>
+                    Weekly offs and holidays inside the range still count as applied
+                    days.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </Field>
+
+          {/* ── Reason ─────────────────────────────────────────────────────── */}
+          <Field
+            label="Reason"
+            hint={`${reason.length}/${REASON_MAX}`}
+          >
             <TextInput
               value={reason}
-              onChangeText={setReason}
-              placeholder="Why do you need this leave?"
+              onChangeText={(v) => setReason(v.slice(0, REASON_MAX))}
+              placeholder="A line is enough — your manager reads this first."
               placeholderTextColor={c.textFaint}
               multiline
               textAlignVertical="top"
+              maxLength={REASON_MAX}
               style={{
                 minHeight: 110,
                 backgroundColor: c.card,
                 borderRadius: radius.input,
-                borderWidth: dark ? 0 : 1,
+                borderWidth: 1,
                 borderColor: c.border,
                 color: c.text,
                 paddingHorizontal: space.lg,
@@ -263,30 +560,54 @@ export default function LeaveApplyScreen() {
               }}
               className="font-ui text-[14px]"
             />
+
+            {/* Starters, per bucket. Typing the same three sentences every
+                month is the actual friction in this form. */}
+            <View className="flex-row flex-wrap" style={{ gap: space.sm }}>
+              {PROMPTS[type].map((p) => (
+                <Pressable
+                  key={p}
+                  onPress={() => setReason(p)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use reason: ${p}`}
+                  style={({ pressed }) => ({
+                    backgroundColor: c.fill,
+                    borderRadius: radius.pill,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                  className="flex-row items-center gap-1.5 px-3 py-1.5"
+                >
+                  <Sparkles size={11} strokeWidth={2.4} color={c.textFaint} />
+                  <Text style={{ color: c.textMuted }} className={T.badge}>
+                    {p}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </Field>
 
-          <Text
-            style={{ color: c.textFaint }}
-            className="font-ui-regular text-[11.5px] leading-4"
-          >
-            Your request goes to your reporting manager for approval. You can
-            withdraw it from My Leave while it is still pending.
+          <Text style={{ color: c.textFaint }} className={`leading-4 ${T.micro}`}>
+            Your request goes to your reporting manager for approval. You can withdraw
+            it from My Leave while it is still pending.
           </Text>
         </ScrollView>
 
-        {/* Sticky CTA — the submit button never scrolls out of reach. */}
+        {/* Sticky CTA — the submit button never scrolls out of reach, and it
+            restates the commitment so the last thing read before tapping is
+            what is actually being asked for. */}
         <View
           style={{
             paddingHorizontal: space.screen,
             paddingTop: space.md,
             paddingBottom: insets.bottom + space.md,
-            backgroundColor: c.bg,
+            backgroundColor: c.card,
             borderTopWidth: 1,
             borderTopColor: c.border,
+            ...(dark ? shadow.none : shadow.floating),
           }}
         >
           <Button
-            label={isLoading ? 'Submitting…' : 'Submit request'}
+            label={isLoading ? 'Submitting…' : `Submit · ${days} ${days === 1 ? 'day' : 'days'}`}
             icon={<Send size={18} strokeWidth={2} color="#FFFFFF" />}
             loading={isLoading}
             onPress={onSubmit}
