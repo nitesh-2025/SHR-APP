@@ -18,7 +18,6 @@ import {
   type NotificationItem,
   type NotificationType,
 } from "../store/notificationApi";
-import { neutral } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 
 const ICONS: Record<NotificationType, LucideIcon> = {
@@ -52,48 +51,51 @@ function Row({
 }) {
   const Icon = ICONS[item.type] ?? Bell;
   const unread = !item.is_read;
-  const { brand, primary } = useTheme();
+  // The unread wash and the icon well used the brand's 50/100 steps, which only
+  // work on white — on the dark sheet they read as two pale slabs. `tint` is the
+  // same recipe already rebuilt from the 500 step at low alpha.
+  const { brand, c, dark, tint } = useTheme();
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={item.title}
-      android_ripple={{ color: "rgba(0,0,0,0.06)" }}
+      android_ripple={{ color: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
       style={({ pressed }) => ({
         opacity: pressed ? 0.75 : 1,
-        backgroundColor: unread ? primary.bg : "transparent",
+        backgroundColor: unread ? tint.bg : "transparent",
       })}
       className="flex-row gap-3 px-5 py-3.5"
     >
       <View
-        style={{
-          backgroundColor: unread ? brand[100] : neutral[100],
-
-        }}
+        style={{ backgroundColor: unread ? tint.bg : c.fill }}
         className="h-9 w-9 items-center justify-center rounded-xl"
       >
-        <Icon size={17} strokeWidth={2} color={unread ? brand[600] : neutral[400]} />
+        <Icon size={17} strokeWidth={2} color={unread ? brand[600] : c.textFaint} />
       </View>
 
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
           <Text
+            style={{ color: unread ? c.text : c.textMuted }}
             className={`flex-1 text-[13px] ${
-              unread
-                ? "font-ui-semibold text-slate-900"
-                : "font-ui text-slate-600"
+              unread ? "font-ui-semibold" : "font-ui"
             }`}
             numberOfLines={1}
           >
             {item.title}
           </Text>
-          <Text className="font-ui-regular text-[11px] text-slate-400">
+          <Text
+            style={{ color: c.textFaint }}
+            className="font-ui-regular text-[11px]"
+          >
             {ago(item.createdAt)}
           </Text>
         </View>
         <Text
-          className="mt-0.5 font-ui-regular text-[12px] text-slate-500"
+          style={{ color: c.textMuted }}
+          className="mt-0.5 font-ui-regular text-[12px]"
           numberOfLines={2}
         >
           {item.message}
@@ -125,7 +127,7 @@ export function NotificationSheet({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { brand } = useTheme();
+  const { brand, c } = useTheme();
   // `skip` while closed: the sheet lives mounted inside the screen, and an
   // always-on poll for a panel nobody opened is wasted battery and requests.
   const { data, isLoading, isFetching, refetch } = useGetNotificationsQuery(
@@ -141,7 +143,7 @@ export function NotificationSheet({
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.78}>
       <View className="flex-row items-center gap-3 px-5 pb-3 pt-1">
-        <Text className="flex-1 font-display text-[17px] text-slate-900">
+        <Text style={{ color: c.text }} className="flex-1 font-display text-[17px]">
           Notifications
         </Text>
 
@@ -167,13 +169,14 @@ export function NotificationSheet({
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Close notifications"
-          className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+          style={{ backgroundColor: c.fill }}
+          className="h-8 w-8 items-center justify-center rounded-full"
         >
-          <X size={16} strokeWidth={2.2} color={neutral[500]} />
+          <X size={16} strokeWidth={2.2} color={c.textMuted} />
         </Pressable>
       </View>
 
-      <View className="h-px bg-slate-100" />
+      <View style={{ backgroundColor: c.border }} className="h-px" />
 
       {isLoading ? (
         <View className="h-40 items-center justify-center">
@@ -181,8 +184,8 @@ export function NotificationSheet({
         </View>
       ) : items.length === 0 ? (
         <View className="items-center gap-2 px-5 py-14">
-          <BellOff size={26} strokeWidth={1.8} color={neutral[300]} />
-          <Text className="font-ui text-[13px] text-slate-400">
+          <BellOff size={26} strokeWidth={1.8} color={c.textFaint} />
+          <Text style={{ color: c.textMuted }} className="font-ui text-[13px]">
             You&apos;re all caught up
           </Text>
         </View>
@@ -197,7 +200,7 @@ export function NotificationSheet({
           refreshing={isFetching && !isLoading}
           onRefresh={refetch}
           ItemSeparatorComponent={() => (
-            <View className="ml-[68px] h-px bg-slate-100" />
+            <View style={{ backgroundColor: c.border }} className="ml-[68px] h-px" />
           )}
           renderItem={({ item }) => (
             <Row

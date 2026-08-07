@@ -247,14 +247,14 @@ export function RangeChip({
   a11y: string;
   onPress: () => void;
 }) {
-  const { brand, primary } = useTheme();
+  const { brand, tint } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={a11y}
       style={({ pressed }) => ({
-        backgroundColor: primary.bg,
+        backgroundColor: tint.bg,
         borderRadius: radius.pill,
         opacity: pressed ? 0.75 : 1,
       })}

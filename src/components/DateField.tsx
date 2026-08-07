@@ -2,7 +2,6 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { neutral } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { fmtDate, parseYmd, WEEKDAYS, ymd, MONTHS_LONG } from '../utils/date';
 
@@ -30,7 +29,9 @@ export function DateField({
   /** Earliest selectable day, `YYYY-MM-DD`. Days before it render inert. */
   min?: string;
 }) {
-  const { brand, primary } = useTheme();
+  // `tint`, not `primary` — the latter is the as-authored light recipe, whose
+  // 50-step fill is a near-white slab on a dark canvas.
+  const { brand, c, tint } = useTheme();
   const [open, setOpen] = useState(false);
 
   const selected = parseYmd(value) ?? new Date();
@@ -55,7 +56,9 @@ export function DateField({
 
   return (
     <View className="flex-1">
-      <Text className="mb-1.5 font-ui-semibold text-[12.5px] text-slate-600">{label}</Text>
+      <Text style={{ color: c.textMuted }} className="mb-1.5 font-ui-semibold text-[12.5px]">
+        {label}
+      </Text>
 
       <Pressable
         onPress={() => setOpen((o) => !o)}
@@ -63,24 +66,32 @@ export function DateField({
         accessibilityLabel={`${label}: ${fmtDate(value)}`}
         accessibilityState={{ expanded: open }}
         style={({ pressed }) => ({
-          borderColor: open ? brand[500] : neutral[200],
+          backgroundColor: c.card,
+          borderColor: open ? brand[500] : c.border,
           opacity: pressed ? 0.8 : 1,
         })}
-        className="h-12 flex-row items-center gap-2 rounded-2xl border bg-white px-3"
+        className="h-12 flex-row items-center gap-2 rounded-2xl border px-3"
       >
         <View
-          style={{ backgroundColor: primary.bg, borderColor: primary.border }}
+          style={{ backgroundColor: tint.bg, borderColor: tint.border }}
           className="h-7 w-7 items-center justify-center rounded-lg border"
         >
           <CalendarDays size={14} strokeWidth={2.2} color={brand[600]} />
         </View>
-        <Text className="flex-1 font-ui text-[13.5px] text-slate-900" numberOfLines={1}>
+        <Text
+          style={{ color: c.text }}
+          className="flex-1 font-ui text-[13.5px]"
+          numberOfLines={1}
+        >
           {fmtDate(value)}
         </Text>
       </Pressable>
 
       {open ? (
-        <View className="mt-2 rounded-2xl border border-slate-100 bg-white p-3">
+        <View
+          style={{ backgroundColor: c.card, borderColor: c.border }}
+          className="mt-2 rounded-2xl border p-3"
+        >
           {/* Month nav */}
           <View className="flex-row items-center justify-between pb-2">
             <Pressable
@@ -91,12 +102,12 @@ export function DateField({
               accessibilityRole="button"
               accessibilityLabel="Previous month"
               className="h-7 w-7 items-center justify-center rounded-full"
-              style={{ backgroundColor: primary.bg }}
+              style={{ backgroundColor: tint.bg }}
             >
               <ChevronLeft size={15} strokeWidth={2.2} color={brand[600]} />
             </Pressable>
 
-            <Text className="font-ui-semibold text-[13px] text-slate-900">
+            <Text style={{ color: c.text }} className="font-ui-semibold text-[13px]">
               {MONTHS_LONG[cursor.getMonth()]} {cursor.getFullYear()}
             </Text>
 
@@ -108,7 +119,7 @@ export function DateField({
               accessibilityRole="button"
               accessibilityLabel="Next month"
               className="h-7 w-7 items-center justify-center rounded-full"
-              style={{ backgroundColor: primary.bg }}
+              style={{ backgroundColor: tint.bg }}
             >
               <ChevronRight size={15} strokeWidth={2.2} color={brand[600]} />
             </Pressable>
@@ -118,7 +129,8 @@ export function DateField({
             {WEEKDAYS.map((d, i) => (
               <Text
                 key={`${d}-${i}`}
-                className="flex-1 text-center font-ui-semibold text-[10px] text-slate-400"
+                style={{ color: c.textFaint }}
+                className="flex-1 text-center font-ui-semibold text-[10px]"
               >
                 {d}
               </Text>
@@ -153,10 +165,10 @@ export function DateField({
                     <Text
                       style={{
                         color: isSelected
-                          ? '#ffffff'
+                          ? '#FFFFFF'
                           : disabled
-                            ? neutral[300]
-                            : neutral[700],
+                            ? c.textFaint
+                            : c.text,
                       }}
                       className="font-ui text-[12.5px]"
                     >

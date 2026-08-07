@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { darkScheme, lightScheme, type Scheme, type Surface } from './colors';
+import { darkScheme, lightScheme, toneFor, type Scheme, type Surface } from './colors';
 import {
   DEFAULT_THEME,
   THEMES,
@@ -28,8 +28,22 @@ interface ThemeValue {
   name: ThemeName;
   /** Primary ramp — `brand[600]` is the accent, `brand[50]` its tint. */
   brand: Ramp;
-  /** Tinted-surface recipe built from that ramp (bg / border / tint / text). */
+  /**
+   * Tinted-surface recipe built from that ramp, AS AUTHORED — the 50/200/600/700
+   * steps. Correct on a white canvas only. Reach for `tint` unless you are
+   * painting on something you know is light.
+   */
   primary: Surface;
+  /**
+   * The same recipe, already corrected for the active scheme.
+   *
+   * `primary.bg` is the ramp's 50 step: over `#0F172A` it is a near-white slab
+   * that glows, which is how a pale-green disc ended up behind every active tab
+   * icon in dark mode. This is `toneFor(primary, dark)` computed once here, so a
+   * caller cannot forget to apply it — the mistake was repeated in 20 places
+   * before this existed.
+   */
+  tint: Surface;
   /** Scheme-aware surfaces: `c.bg`, `c.card`, `c.text`, `c.border`, … */
   c: Scheme;
   dark: boolean;
@@ -43,6 +57,7 @@ const ThemeContext = createContext<ThemeValue>({
   name: DEFAULT_THEME,
   brand: fallbackRamp,
   primary: surfaceOf(fallbackRamp),
+  tint: surfaceOf(fallbackRamp),
   c: lightScheme,
   dark: false,
   mode: 'system',
@@ -94,10 +109,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ThemeValue>(() => {
     const ramp = THEMES[name].ramp;
     const dark = mode === 'system' ? system === 'dark' : mode === 'dark';
+    const primary = surfaceOf(ramp);
     return {
       name,
       brand: ramp,
-      primary: surfaceOf(ramp),
+      primary,
+      tint: toneFor(primary, dark),
       c: dark ? darkScheme : lightScheme,
       dark,
       mode,

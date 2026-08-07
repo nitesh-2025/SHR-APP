@@ -24,7 +24,7 @@ export function MenuButton({
   onPress: () => void;
   accessibilityLabel?: string;
 }) {
-  const { brand, c, primary } = useTheme();
+  const { brand, c, tint } = useTheme();
   const press = useSharedValue(0);
 
   const style = useAnimatedStyle(() => ({
@@ -52,7 +52,7 @@ export function MenuButton({
           height: 44,
           borderRadius: 14,
           borderWidth: 1,
-          borderColor: primary.border,
+          borderColor: tint.border,
           // `bg-white` was hardcoded here, which turned the button into a white
           // block on the dark canvas.
           backgroundColor: c.card,

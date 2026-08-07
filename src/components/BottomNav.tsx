@@ -78,7 +78,7 @@ function Item({
   onPress: () => void;
 }) {
   const Icon = tab.icon;
-  const { brand, primary, dark, c } = useTheme();
+  const { brand, tint, dark, c } = useTheme();
 
   // A little bounce on the way in — a tab change should be felt, and a
   // critically damped spring here reads as a fade rather than a switch.
@@ -120,7 +120,7 @@ function Item({
             {
               position: "absolute",
               inset: 0,
-              backgroundColor: primary.bg,
+              backgroundColor: tint.bg,
               borderRadius: radius.pill,
             },
             discStyle,
@@ -135,7 +135,7 @@ function Item({
             size={22}
             strokeWidth={active ? 2.2 : 1.8}
             color={color}
-            fill={active ? primary.bg : "none"}
+            fill={active ? tint.bg : "none"}
           />
         </Animated.View>
 
