@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  EllipsisVertical,
   LogIn,
   LogOut,
   MapPin,
@@ -23,6 +24,8 @@ import {
   RefreshControl,
   ScrollView,
   Text,
+  Modal,
+  Button,
   View,
 } from "react-native";
 import Animated, {
@@ -152,7 +155,11 @@ function RegularizationCard({
         </View>
 
         <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+          <Text
+            style={{ color: c.text }}
+            className={T.cardTitleSm}
+            numberOfLines={1}
+          >
             {REG_TYPE_LABEL[item.type] ?? item.type}
           </Text>
           <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`}>
@@ -168,7 +175,10 @@ function RegularizationCard({
         <Badge label={spec.label} tone={spec.tone} />
       </View>
 
-      <Text style={{ color: c.textMuted }} className={`mt-2.5 leading-5 ${T.secondary}`}>
+      <Text
+        style={{ color: c.textMuted }}
+        className={`mt-2.5 leading-5 ${T.secondary}`}
+      >
         {item.reason}
       </Text>
 
@@ -308,7 +318,7 @@ function StatCard({
       style={{
         width: STAT_WIDTH,
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card - 12,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -335,6 +345,75 @@ function StatCard({
       >
         {label}
       </Text>
+    </View>
+  );
+}
+
+/* ── Stat card ────────────────────────────────────────────────────────────── */
+
+function StatCardInline({
+  icon: Icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: LucideIcon;
+  value: string;
+  label: string;
+  tone: Surface;
+}) {
+  const { c, dark } = useTheme();
+
+  return (
+    <View
+      className="flex-row items-center"
+      style={{
+        width: STAT_WIDTH,
+        backgroundColor: c.card,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: c.border,
+        padding: space.lg,
+        ...(dark ? shadow.none : shadow.soft),
+      }}
+    >
+      {/* Icon */}
+      <View
+        className="items-center justify-center"
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: 12,
+          backgroundColor: tone.tint,
+        }}
+      >
+        <Icon size={20} color={(tone as any).icon} strokeWidth={2.2} />
+      </View>
+
+      {/* Text */}
+      <View className="ml-3 flex-1">
+        <Text
+          numberOfLines={1}
+          className={T.kpiSm}
+          style={{
+            color: c.text,
+            fontWeight: "700",
+          }}
+        >
+          {value}
+        </Text>
+
+        <Text
+          numberOfLines={1}
+          className={T.micro}
+          style={{
+            color: c.textMuted,
+            marginTop: 2,
+          }}
+        >
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -498,10 +577,13 @@ function Total({ label, value }: { label: string; value: string }) {
  */
 function DayCard({
   record,
+  expanded,
+  onToggle,
   onRegularize,
 }: {
   record: AttendanceRecord;
-  /** Omitted while the day is still running — see `canRegularize`. */
+  expanded: boolean;
+  onToggle: () => void;
   onRegularize?: () => void;
 }) {
   const { c, dark } = useTheme();
@@ -511,140 +593,142 @@ function DayCard({
   const hasFlags = record.is_late || record.is_manual;
 
   return (
-    <View
-      style={{
-        backgroundColor: c.card,
-        borderRadius: radius.card - 4,
-        borderWidth: 1,
-        borderColor: c.border,
-        padding: space.lg,
-        ...(dark ? shadow.none : shadow.soft),
-      }}
-    >
-      {/* ── Head ─────────────────────────────────────────────────────────── */}
-      <View className="flex-row items-center gap-3">
-        <View
-          style={{ backgroundColor: c.fill, borderRadius: radius.well - 2 }}
-          className="h-12 w-12 items-center justify-center"
-        >
-          <Text
-            style={{ color: c.text }}
-            className={T.cardTitle}
-            allowFontScaling={false}
+    <Pressable onPress={onToggle} accessibilityRole="button">
+      <View
+        style={{
+          backgroundColor: c.card,
+          borderWidth: 1,
+          borderRadius: 4,
+          borderColor: c.border,
+          padding: space.lg,
+          ...(dark ? shadow.none : shadow.soft),
+        }}
+      >
+        {/* ── Head ─────────────────────────────────────────────────────────── */}
+        <View className="flex-row items-center gap-3">
+          <View
+            style={{ backgroundColor: c.fill, borderRadius: radius.well - 1 }}
+            className="h-12 w-12 items-center justify-center"
           >
-            {date ? date.getDate() : "--"}
-          </Text>
-          <Text
-            style={{ color: c.textMuted }}
-            className={T.nano}
-            allowFontScaling={false}
-          >
-            {date ? MONTHS[date.getMonth()] : ""}
-          </Text>
+            <Text
+              style={{ color: c.text }}
+              className={T.cardTitle}
+              allowFontScaling={false}
+            >
+              {date ? date.getDate() : "--"}
+            </Text>
+            <Text
+              style={{ color: c.textMuted }}
+              className={T.nano}
+              allowFontScaling={false}
+            >
+              {date ? MONTHS[date.getMonth()] : ""}
+            </Text>
+          </View>
+
+          <View className="flex-1">
+            <Text
+              style={{ color: c.text }}
+              className={T.cardTitleSm}
+              numberOfLines={1}
+            >
+              {date ? WEEKDAYS_LONG[date.getDay()] : record.date}
+            </Text>
+            <Text
+              style={{ color: c.textMuted }}
+              className={`mt-0.5 ${T.micro}`}
+              numberOfLines={1}
+            >
+              {absent
+                ? "No attendance"
+                : `${fmtDuration(record.total_work_minutes)} worked`}
+            </Text>
+          </View>
+
+          <Badge label={status.label} tone={status.tone} />
         </View>
 
-        <View className="flex-1">
-          <Text
-            style={{ color: c.text }}
-            className={T.cardTitleSm}
-            numberOfLines={1}
-          >
-            {date ? WEEKDAYS_LONG[date.getDay()] : record.date}
-          </Text>
-          <Text
-            style={{ color: c.textMuted }}
-            className={`mt-0.5 ${T.micro}`}
-            numberOfLines={1}
-          >
-            {absent
-              ? "No attendance"
-              : `${fmtDuration(record.total_work_minutes)} worked`}
-          </Text>
-        </View>
+        {expanded && !absent ? (
+          <>
+            <View style={{ backgroundColor: c.border }} className="my-3 h-px" />
 
-        <Badge label={status.label} tone={status.tone} />
+            <View className="flex-row items-center gap-3">
+              <PunchCol
+                icon={LogIn}
+                label="Clock In"
+                time={fmtTime(record.clock_in?.at)}
+                tone={surface.success}
+              />
+              <PunchCol
+                icon={LogOut}
+                label="Clock Out"
+                time={fmtTime(record.clock_out?.at)}
+                tone={surface.danger}
+              />
+            </View>
+
+            <Where punch={record.clock_in} label="In" />
+            <Where punch={record.clock_out} label="Out" />
+
+            <View
+              style={{
+                backgroundColor: c.fill,
+                borderRadius: radius.well - 4,
+                paddingHorizontal: space.md,
+                paddingVertical: space.sm + 2,
+              }}
+              className="mt-3 flex-row items-center gap-3"
+            >
+              <Total
+                label="Break"
+                value={fmtDuration(record.total_break_minutes ?? 0)}
+              />
+              <View
+                style={{ backgroundColor: c.border }}
+                className="h-7 w-px"
+              />
+              <Total
+                label="Worked"
+                value={fmtDuration(record.total_work_minutes)}
+              />
+            </View>
+
+            {hasFlags || onRegularize ? (
+              <View className="mt-3 flex-row flex-wrap items-center justify-between gap-2">
+                <View
+                  className="flex-row flex-wrap items-center"
+                  style={{ gap: space.sm }}
+                >
+                  {record.is_late ? (
+                    <Badge
+                      label={`Late by ${fmtDuration(record.late_by_minutes)}`}
+                      tone={surface.warning}
+                    />
+                  ) : null}
+                  {record.is_manual ? (
+                    <Badge
+                      label={`Approved${record.marked_by_name ? ` · ${record.marked_by_name}` : ""}`}
+                      tone={surface.info}
+                      icon={
+                        <Check
+                          size={11}
+                          strokeWidth={3}
+                          color={surface.info.tint}
+                        />
+                      }
+                    />
+                  ) : null}
+                </View>
+
+                {onRegularize ? (
+                  <RegularizeButton onPress={onRegularize} />
+                ) : null}
+              </View>
+            ) : null}
+          </>
+        ) : null}
       </View>
-
-      {absent ? (
-        <Text style={{ color: c.textMuted }} className={`mt-3 ${T.secondary}`}>
-          No punches were recorded for this day.
-        </Text>
-      ) : (
-        <>
-          <View style={{ backgroundColor: c.border }} className="my-3 h-px" />
-
-          <View className="flex-row items-center gap-3">
-            <PunchCol
-              icon={LogIn}
-              label="Clock In"
-              time={fmtTime(record.clock_in?.at)}
-              tone={surface.success}
-            />
-            <PunchCol
-              icon={LogOut}
-              label="Clock Out"
-              time={fmtTime(record.clock_out?.at)}
-              tone={surface.danger}
-            />
-          </View>
-
-          <Where punch={record.clock_in} label="In" />
-          <Where punch={record.clock_out} label="Out" />
-
-          {/* Totals sit in their own recessed strip — they are derived from the
-              punches above, and the inset says so. */}
-          <View
-            style={{
-              backgroundColor: c.fill,
-              borderRadius: radius.well - 4,
-              paddingHorizontal: space.md,
-              paddingVertical: space.sm + 2,
-            }}
-            className="mt-3 flex-row items-center gap-3"
-          >
-            <Total
-              label="Break"
-              value={fmtDuration(record.total_break_minutes ?? 0)}
-            />
-            <View style={{ backgroundColor: c.border }} className="h-7 w-px" />
-            <Total
-              label="Worked"
-              value={fmtDuration(record.total_work_minutes)}
-            />
-          </View>
-        </>
-      )}
-
-      {/* ── Footer ───────────────────────────────────────────────────────
-          Exceptions only when there ARE any — a row of "no problem" chips on
-          every card would bury the days that have one. */}
-      {hasFlags || onRegularize ? (
-        <View className="mt-3 flex-row flex-wrap items-center justify-between gap-2">
-          <View
-            className="flex-row flex-wrap items-center"
-            style={{ gap: space.sm }}
-          >
-            {record.is_late ? (
-              <Badge
-                label={`Late by ${fmtDuration(record.late_by_minutes)}`}
-                tone={surface.warning}
-              />
-            ) : null}
-            {record.is_manual ? (
-              <Badge
-                label={`Approved${record.marked_by_name ? ` · ${record.marked_by_name}` : ""}`}
-                tone={surface.info}
-                icon={
-                  <Check size={11} strokeWidth={3} color={surface.info.tint} />
-                }
-              />
-            ) : null}
-          </View>
-
-          {onRegularize ? <RegularizeButton onPress={onRegularize} /> : null}
-        </View>
-      ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -698,6 +782,8 @@ export default function AttendanceScreen() {
     () => new Set<View$>(["list"]),
   );
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   /**
    * `null` = the whole year, but the list opens on the CURRENT month.
    *
@@ -752,7 +838,9 @@ export default function AttendanceScreen() {
   const regItems = useMemo(
     () =>
       [...(regs.data?.items ?? [])].sort((a, b) =>
-        String(b.createdAt ?? b.date).localeCompare(String(a.createdAt ?? a.date)),
+        String(b.createdAt ?? b.date).localeCompare(
+          String(a.createdAt ?? a.date),
+        ),
       ),
     [regs.data],
   );
@@ -862,24 +950,14 @@ export default function AttendanceScreen() {
 
         <View className="flex-1">
           <Text
-            style={{ color: c.text }}
+            style={{ color: c.text, fontFamily: "Inter_800SemiBold" }}
             className={T.section}
             numberOfLines={1}
           >
-            My Attendance
-          </Text>
-          <Text
-            style={{ color: c.textMuted }}
-            className={T.caption}
-            numberOfLines={1}
-          >
-            {listItems.length} {listItems.length === 1 ? "day" : "days"}{" "}
-            recorded
+            Attendance
           </Text>
         </View>
 
-        {/* Month sits to the LEFT of year — narrowing reads outer-to-inner.
-            The calendar has its own stepper, so the chips are List-only. */}
         {view === "list" ? (
           <View className="flex-row items-center gap-2">
             <RangeChip
@@ -900,12 +978,65 @@ export default function AttendanceScreen() {
             onPress={() => setYearOpen(true)}
           />
         )}
+
+        <View style={{ position: "relative" }}>
+          <Pressable onPress={() => setMenuOpen(!menuOpen)}>
+            <EllipsisVertical size={22} color={c.text} />
+          </Pressable>
+
+          {menuOpen && (
+            <View
+              style={{
+                position: "absolute",
+                top: 35,
+                borderWidth: 1,
+                borderColor: c.border,
+                right: 0,
+                width: 180,
+                backgroundColor: "#fff",
+                borderRadius: 6,
+                elevation: 8,
+                shadowColor: "#000",
+                shadowOpacity: 0.15,
+                zIndex: 1000,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                overflow: "hidden",
+              }}
+            >
+              <Pressable style={{ padding: 10, paddingLeft: 15 }}>
+                <Text>Regularization</Text>
+              </Pressable>
+
+              <Pressable
+                style={{
+                  padding: 10,
+                  paddingLeft: 15,
+                  borderTopWidth: 1,
+                  borderTopColor: c.border,
+                }}
+              >
+                <Text>Roster</Text>
+              </Pressable>
+
+              <Pressable
+                style={{
+                  padding: 10,
+                  paddingLeft: 15,
+                  borderTopWidth: 1,
+                  borderTopColor: c.border,
+                }}
+              >
+                <Text>View Analytics</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <View
+      {/* <View
         style={{
-          paddingHorizontal: space.screen,
           gap: space.md,
           paddingBottom: space.lg,
         }}
@@ -914,8 +1045,6 @@ export default function AttendanceScreen() {
           segments={[
             { key: "list", label: "List" },
             { key: "roster", label: "Roster" },
-            // The count is the reason this tab exists: a pending request is
-            // something you are waiting on, and it should say so from the bar.
             { key: "requests", label: "Requests", count: pendingRegs },
           ]}
           value={view}
@@ -924,19 +1053,15 @@ export default function AttendanceScreen() {
             setVisited((v) => (v.has(next) ? v : new Set(v).add(next)));
           }}
         />
-      </View>
+      </View> */}
 
-      {/* ── Panes ────────────────────────────────────────────────────────── */}
       <View className="flex-1">
-        {/* ── List ───────────────────────────────────────────────────────── */}
         <TabPane active={view === "list"}>
           <ScrollView
             contentContainerStyle={{ paddingBottom: bottomPad }}
             showsVerticalScrollIndicator={false}
             refreshControl={refresher}
           >
-            {/* Stats — a scrolling rail, not a squeezed row: a fourth stat at
-                flex-1 would be narrower than its own icon. */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -966,25 +1091,25 @@ export default function AttendanceScreen() {
                 </>
               ) : (
                 <>
-                  <StatCard
+                  <StatCardInline
                     icon={Timer}
                     value={String(stats.present).padStart(2, "0")}
                     label="Days Present"
                     tone={surface.success}
                   />
-                  <StatCard
+                  <StatCardInline
                     icon={TimerReset}
                     value={String(stats.late).padStart(2, "0")}
                     label="Late Arrivals"
                     tone={surface.warning}
                   />
-                  <StatCard
+                  <StatCardInline
                     icon={CalendarX}
                     value={String(stats.absent).padStart(2, "0")}
                     label="Days Absent"
                     tone={surface.danger}
                   />
-                  <StatCard
+                  <StatCardInline
                     icon={CalendarDays}
                     value={fmtDuration(stats.minutes)}
                     label="Total Worked"
@@ -1024,6 +1149,10 @@ export default function AttendanceScreen() {
                   <DayCard
                     key={r._id}
                     record={r}
+                    expanded={expandedId === r._id}
+                    onToggle={() =>
+                      setExpandedId(expandedId === r._id ? null : r._id)
+                    }
                     onRegularize={
                       canRegularize(r.date, todayKey, r)
                         ? () => setRegularizeDate(r.date)
@@ -1045,8 +1174,6 @@ export default function AttendanceScreen() {
               refreshControl={refresher}
             >
               <View style={{ paddingHorizontal: space.screen }}>
-                {/* Month stepper. A strip of twelve chips to move the grid by
-                    one was a lot of control for one small job. */}
                 <View className="flex-row items-center justify-between pb-4">
                   <Pressable
                     onPress={() => stepMonth(-1)}
@@ -1321,7 +1448,9 @@ export default function AttendanceScreen() {
                 </>
               ) : regs.error ? (
                 <EmptyState
-                  icon={<PenLine size={32} strokeWidth={1.6} color={brand[600]} />}
+                  icon={
+                    <PenLine size={32} strokeWidth={1.6} color={brand[600]} />
+                  }
                   title="Could not load your requests"
                   message={describeApiError(regs.error).title}
                   actionLabel="Try again"
@@ -1329,13 +1458,17 @@ export default function AttendanceScreen() {
                 />
               ) : regItems.length === 0 ? (
                 <EmptyState
-                  icon={<PenLine size={32} strokeWidth={1.6} color={brand[600]} />}
+                  icon={
+                    <PenLine size={32} strokeWidth={1.6} color={brand[600]} />
+                  }
                   title="No requests raised"
                   message="Open a day on the Roster and tap Regularize when a punch is missing or wrong. Whatever you raise shows up here with its outcome."
                   actionLabel="Go to Roster"
                   onAction={() => {
                     setView("roster");
-                    setVisited((v) => (v.has("roster") ? v : new Set(v).add("roster")));
+                    setVisited((v) =>
+                      v.has("roster") ? v : new Set(v).add("roster"),
+                    );
                   }}
                 />
               ) : (
