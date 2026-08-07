@@ -1,5 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Modal, Pressable, useWindowDimensions, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -37,12 +44,24 @@ export function BottomSheet({
   onClose,
   children,
   maxHeightRatio = 0.86,
+  avoidKeyboard = false,
 }: {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
   /** Cap as a fraction of screen height. Content shorter than this wraps. */
   maxHeightRatio?: number;
+  /**
+   * Lift the panel clear of the keyboard. OPT-IN, because it is only correct
+   * for a sheet that holds text inputs — a `Modal` gets no keyboard handling
+   * from the OS, so a form sheet left without this has its lower fields typed
+   * into blind, behind the keyboard.
+   *
+   * Not switched on for every sheet: the picker and confirm sheets have nothing
+   * to type into, and wrapping them in a `KeyboardAvoidingView` adds a layout
+   * pass that can fight the open/close transform.
+   */
+  avoidKeyboard?: boolean;
 }) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -124,7 +143,12 @@ export function BottomSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View className="flex-1 justify-end">
+      <KeyboardAvoidingView
+        // `undefined` on Android: the window already resizes there, and a second
+        // avoider on top of that double-counts the inset and leaves a gap.
+        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end"
+      >
         <Animated.View
           style={[{ position: 'absolute', inset: 0, backgroundColor: c.scrim }, scrimStyle]}
         >
@@ -162,7 +186,7 @@ export function BottomSheet({
 
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
