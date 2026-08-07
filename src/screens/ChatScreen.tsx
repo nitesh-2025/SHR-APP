@@ -43,7 +43,7 @@ import { EmptyState, Skeleton } from "../components/ui";
 import { useKeyboardHeight } from "../hooks/useKeyboardHeight";
 import { TYPING_EVENT } from "../hooks/useRealtime";
 import { usePresence } from "../hooks/usePresence";
-import { describeApiError } from "../lib/apiError";
+import { describeApiError, toastApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { selectCurrentUser, useAppSelector } from "../store";
@@ -571,7 +571,7 @@ export default function ChatScreen() {
       // is the worst possible failure mode for a composer.
       setDraft(content);
       setPending(asset);
-      toast.error(describeApiError(e).title);
+      toast.error(...toastApiError(e));
     }
   };
 
@@ -620,7 +620,7 @@ export default function ChatScreen() {
     try {
       await react({ message_id, emoji, partner_id: userId }).unwrap();
     } catch (e) {
-      toast.error(describeApiError(e).title);
+      toast.error(...toastApiError(e));
     }
   };
 

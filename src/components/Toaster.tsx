@@ -258,8 +258,12 @@ function ToastRow({ item }: { item: ToastItem }) {
             </View>
 
             <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
+              {/* Two lines, not one. The title now carries the BACKEND's own
+                  sentence when there is one ("phone must be a valid phone
+                  number"), and clipping that at one line hides the half that
+                  says what to fix. Short titles are unaffected. */}
               <Text
-                numberOfLines={1}
+                numberOfLines={2}
                 style={{ fontSize: 14.5, lineHeight: 20, color: palette.title }}
                 className="font-ui-semibold"
               >
