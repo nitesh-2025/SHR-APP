@@ -35,6 +35,8 @@ export type MenuKey =
   | "personal"
   | "bank"
   | "emergency"
+  | "statutory"
+  | "skills"
   | "more"
   | (string & {});
 
@@ -92,10 +94,12 @@ export function useMenuNav(options?: {
 
         // Narrowed explicitly: `MenuKey` widens to `string` so callers can pass
         // a key the switch does not know yet, and TS cannot see that these
-        // three literals are exactly `ProfileSection` without being told.
+        // literals are exactly `ProfileSection` without being told.
         case "personal":
         case "bank":
         case "emergency":
+        case "statutory":
+        case "skills":
           return navigation.navigate("ProfileEdit", {
             section: key as ProfileSection,
           });

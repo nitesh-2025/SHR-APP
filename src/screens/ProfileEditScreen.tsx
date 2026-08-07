@@ -18,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, EmptyState, Skeleton } from '../components/ui';
-import { describeApiError } from '../lib/apiError';
+import { describeApiError, toastApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import {
@@ -27,18 +27,32 @@ import {
   type EmployeeProfile,
   type UpdateEmployeeBody,
 } from '../store/employeesApi';
-import { radius, space, surface } from '../theme/colors';
+import { radius, space, surface, toneFor } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
 
-export type ProfileSection = 'personal' | 'bank' | 'emergency';
+export type ProfileSection =
+  | 'personal'
+  | 'bank'
+  | 'emergency'
+  | 'statutory'
+  | 'skills';
+
+/**
+ * Top-level objects on the PATCH body.
+ *
+ * A group is always sent WHOLE (see `save`): the API replaces the object rather
+ * than merging into it, so posting `{ emergency_contact: { phone } }` would
+ * blank the name that was already on file.
+ */
+const GROUPS = ['emergency_contact', 'bank_details', 'statutory'] as const;
 
 /* ── Field spec ───────────────────────────────────────────────────────────── */
 
-type FieldKind = 'text' | 'email' | 'phone' | 'date' | 'choice';
+type FieldKind = 'text' | 'email' | 'phone' | 'date' | 'choice' | 'tags';
 
 interface FieldSpec {
-  /** Dot path into the PATCH body — `emergency_contact.phone` nests one level. */
+  /** Dot path into the PATCH body — `statutory.pan.number` nests two levels. */
   path: string;
   label: string;
   placeholder: string;
@@ -46,6 +60,10 @@ interface FieldSpec {
   choices?: { value: string; label: string }[];
   /** Sentence-case for free text; names stay word-case; ids stay untouched. */
   caps?: 'none' | 'words' | 'sentences' | 'characters';
+  /** Rendered under the input, always — not an error, just what to type. */
+  hint?: string;
+  /** Checked only when the field is non-empty AND changed. Return null if fine. */
+  validate?: (v: string) => string | null;
 }
 
 /**
@@ -150,6 +168,69 @@ const SECTIONS: Record<
       { path: 'bank_details.branch', label: 'Branch', placeholder: 'Branch' },
     ],
   },
+  statutory: {
+    title: 'Statutory & IDs',
+    subtitle: 'The numbers payroll and compliance need on file',
+    fields: [
+      {
+        path: 'statutory.pan.number',
+        label: 'PAN',
+        placeholder: 'ABCDE1234F',
+        caps: 'characters',
+        hint: 'Five letters, four digits, one letter.',
+        validate: (v) =>
+          /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v) ? null : 'A PAN looks like ABCDE1234F.',
+      },
+      {
+        path: 'statutory.aadhaar.number',
+        label: 'Aadhaar',
+        placeholder: '12-digit number',
+        kind: 'phone',
+        caps: 'none',
+        validate: (v) =>
+          v.replace(/\D/g, '').length === 12 ? null : 'An Aadhaar number is 12 digits.',
+      },
+      {
+        path: 'statutory.uan.number',
+        label: 'UAN',
+        placeholder: '12-digit universal account number',
+        kind: 'phone',
+        caps: 'none',
+        hint: 'Your PF universal account number, if you have one.',
+        validate: (v) =>
+          v.replace(/\D/g, '').length === 12 ? null : 'A UAN is 12 digits.',
+      },
+      {
+        path: 'statutory.pf.number',
+        label: 'PF account number',
+        placeholder: 'e.g. MH/BAN/1234567/000/0001234',
+        caps: 'characters',
+      },
+      {
+        path: 'statutory.esic.number',
+        label: 'ESIC number',
+        placeholder: '17-digit insurance number',
+        kind: 'phone',
+        caps: 'none',
+        validate: (v) =>
+          v.replace(/\D/g, '').length === 17 ? null : 'An ESIC number is 17 digits.',
+      },
+    ],
+  },
+  skills: {
+    title: 'Skills',
+    subtitle: 'What you can be staffed on',
+    fields: [
+      {
+        path: 'skills',
+        label: 'Skills',
+        placeholder: 'React Native, Node.js, MongoDB',
+        kind: 'tags',
+        caps: 'none',
+        hint: 'Separate each one with a comma.',
+      },
+    ],
+  },
 };
 
 /* ── Path helpers ─────────────────────────────────────────────────────────── */
@@ -163,11 +244,15 @@ function readPath(source: unknown, path: string): string {
       source,
     );
   if (value === null || value === undefined) return '';
+  // `skills` is the one array on the form. Joined with ", " so the round trip
+  // through the text field is lossless — `String(['a','b'])` would give "a,b"
+  // and silently drop the spacing the user typed.
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ');
   // A date arrives as a full ISO stamp; the field edits the day only.
   return String(value).slice(0, path.endsWith('date_of_birth') ? 10 : undefined);
 }
 
-function writePath(target: Record<string, unknown>, path: string, value: string) {
+function writePath(target: Record<string, unknown>, path: string, value: unknown) {
   const keys = path.split('.');
   let node = target;
   for (let i = 0; i < keys.length - 1; i += 1) {
@@ -176,6 +261,16 @@ function writePath(target: Record<string, unknown>, path: string, value: string)
     node = node[key] as Record<string, unknown>;
   }
   node[keys[keys.length - 1]] = value;
+}
+
+/** What actually goes on the wire for one field — a list for `tags`, else text. */
+function valueFor(spec: FieldSpec, raw: string): unknown {
+  const v = raw.trim();
+  if (spec.kind !== 'tags') return v;
+  return v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** `2026-08-01` and nothing else — the server stores a date, not a sentence. */
@@ -196,7 +291,7 @@ function FieldInput({
   disabled: boolean;
   onChange: (v: string) => void;
 }) {
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint, dark } = useTheme();
 
   if (spec.kind === 'choice') {
     return (
@@ -218,7 +313,7 @@ function FieldInput({
                 style={({ pressed }) => ({
                   flex: 1,
                   height: 46,
-                  backgroundColor: active ? primary.bg : c.fill,
+                  backgroundColor: active ? tint.bg : c.fill,
                   borderRadius: radius.well,
                   borderWidth: 1,
                   borderColor: active ? brand[600] : 'transparent',
@@ -240,7 +335,9 @@ function FieldInput({
     );
   }
 
-  const multiline = spec.path === 'address';
+  // Address and a skill list are both things people keep adding to — one line
+  // that scrolls sideways hides what was already typed.
+  const multiline = spec.path === 'address' || spec.kind === 'tags';
 
   return (
     <View>
@@ -282,9 +379,16 @@ function FieldInput({
           accessibilityLabel={spec.label}
         />
       </View>
+      {/* The error replaces the hint rather than stacking under it — two lines
+          of guidance where one contradicts the other is how a field ends up
+          taller than the input it explains. */}
       {error ? (
-        <Text style={{ color: surface.danger.text }} className={`mt-1 ${T.micro}`}>
+        <Text style={{ color: toneFor(surface.danger, dark).text }} className={`mt-1 ${T.micro}`}>
           {error}
+        </Text>
+      ) : spec.hint ? (
+        <Text style={{ color: c.textFaint }} className={`mt-1 ${T.micro}`}>
+          {spec.hint}
         </Text>
       ) : null}
     </View>
@@ -314,6 +418,8 @@ export default function ProfileEditScreen() {
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  /** Set on the first keystroke. Guards the seeding effect below. */
+  const [touched, setTouched] = useState(false);
 
   /** What the server currently holds, flattened onto this section's paths. */
   const original = useMemo(() => {
@@ -322,11 +428,18 @@ export default function ProfileEditScreen() {
     return out;
   }, [data, spec]);
 
-  // Seed the form once the record lands. Keyed on `original` so a pull-to-
-  // refresh that changes nothing does not stomp on what is being typed.
+  // Seed the form once the record lands, and re-seed on a later fetch ONLY
+  // while nothing has been typed.
+  //
+  // `original` is a fresh object on every `data` reference change, so the old
+  // unguarded version re-ran on any refetch of `MyProfile` — including the one
+  // the Profile screen behind this one can trigger — and silently replaced
+  // half-typed values with what the server still held. That is the "the form
+  // keeps resetting itself" report.
   useEffect(() => {
+    if (touched) return;
     setValues(original);
-  }, [original]);
+  }, [original, touched]);
 
   const locked = Boolean(data?.is_lock);
 
@@ -339,7 +452,8 @@ export default function ProfileEditScreen() {
     if (locked || dirty.length === 0) return;
 
     // Validate only what is being SENT — an old bad value already on the record
-    // is not this save's problem to block.
+    // is not this save's problem to block. Clearing a field is always allowed,
+    // so an empty value skips validation entirely.
     const found: Record<string, string> = {};
     for (const f of dirty) {
       const v = (values[f.path] ?? '').trim();
@@ -356,6 +470,10 @@ export default function ProfileEditScreen() {
       if (f.path === 'bank_details.ifsc_code' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v)) {
         found[f.path] = 'An IFSC looks like HDFC0001234.';
       }
+      // Per-field rule from the spec (PAN, Aadhaar, UAN, ESIC…). Runs last so a
+      // field can carry its own message without this block knowing its shape.
+      const own = f.validate?.(v);
+      if (own) found[f.path] = own;
     }
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -363,19 +481,23 @@ export default function ProfileEditScreen() {
       return;
     }
 
-    // Only the changed paths. Nested ones rebuild their parent object, because
-    // the API takes `emergency_contact` whole rather than by leaf.
+    // Only the changed paths.
     const body: Record<string, unknown> = {};
-    for (const f of dirty) writePath(body, f.path, (values[f.path] ?? '').trim());
+    for (const f of dirty) writePath(body, f.path, valueFor(f, values[f.path] ?? ''));
 
-    // A nested group must carry its untouched siblings too — sending
+    // A touched group is then rebuilt WHOLE from every field the section knows,
+    // because the API replaces the object rather than merging into it — sending
     // `{ emergency_contact: { phone } }` would blank the name.
-    for (const group of ['emergency_contact', 'bank_details']) {
+    //
+    // Rebuilt by re-walking the full path (not `split('.')[1]`, which the old
+    // version used): `statutory.pan.number` is two levels deep, and a
+    // one-level rebuild would have written the key `"pan.number"`.
+    for (const group of GROUPS) {
       if (!body[group]) continue;
-      const whole: Record<string, string> = {};
+      const whole: Record<string, unknown> = {};
       for (const f of spec.fields) {
         if (!f.path.startsWith(`${group}.`)) continue;
-        whole[f.path.split('.')[1]] = (values[f.path] ?? '').trim();
+        writePath(whole, f.path.slice(group.length + 1), valueFor(f, values[f.path] ?? ''));
       }
       body[group] = whole;
     }
@@ -385,7 +507,7 @@ export default function ProfileEditScreen() {
       toast.success('Profile updated');
       navigation.goBack();
     } catch (e) {
-      toast.error(describeApiError(e).title);
+      toast.error(...toastApiError(e));
     }
   };
 
@@ -480,6 +602,7 @@ export default function ProfileEditScreen() {
                   error={errors[f.path]}
                   disabled={locked || saving}
                   onChange={(v) => {
+                    setTouched(true);
                     setValues((prev) => ({ ...prev, [f.path]: v }));
                     if (errors[f.path]) {
                       setErrors((prev) => {
