@@ -21,6 +21,7 @@ import ProfileEditScreen from "../screens/ProfileEditScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import ReferralScreen from "../screens/ReferralScreen";
 import TeamScreen from "../screens/TeamScreen";
+import TicketDetailScreen from "../screens/TicketDetailScreen";
 import TicketsScreen from "../screens/TicketsScreen";
 import WorkCalendarScreen from "../screens/WorkCalendarScreen";
 import { useAutoLogout } from "../hooks/useAutoLogout";
@@ -52,6 +53,11 @@ export type RootStackParamList = {
   Referrals: undefined;
   /** Issues the signed-in employee has raised. */
   Tickets: undefined;
+  /**
+   * One ticket and its reply thread. `title` is passed through only so the
+   * header can paint before the detail response lands.
+   */
+  Ticket: { id: string; title?: string };
   /** The company year: declared holidays plus the working-week policy. */
   Holidays: undefined;
   /** Company property currently in this employee's custody. */
@@ -126,6 +132,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="Referrals" component={ReferralScreen} />
             <Stack.Screen name="Tickets" component={TicketsScreen} />
+            <Stack.Screen name="Ticket" component={TicketDetailScreen} />
             <Stack.Screen name="Holidays" component={WorkCalendarScreen} />
             <Stack.Screen name="Assets" component={AssetsScreen} />
             <Stack.Screen name="Payslip" component={PayslipScreen} />

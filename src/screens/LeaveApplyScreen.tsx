@@ -22,12 +22,13 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { DateField } from '../components/DateField';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button } from '../components/ui';
+import { Button, Skeleton } from '../components/ui';
 import { describeApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import {
@@ -36,6 +37,10 @@ import {
   LEAVE_TYPES,
   type LeaveType,
 } from '../store/leaveApi';
+import {
+  useGetLeavePreviewQuery,
+  type LeavePreview,
+} from '../store/workCalendarApi';
 import { radius, shadow, space, surface, toneFor } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
@@ -157,6 +162,136 @@ function Field({
 
 /* ── Screen ───────────────────────────────────────────────────────────────── */
 
+/* ── Range breakdown ──────────────────────────────────────────────────────── */
+
+/**
+ * How many days a range is actually CHARGED for.
+ *
+ * `working_days` are the working days inside the range; `sandwich_days` are the
+ * off days that fall between two leave days and are counted anyway. Their sum is
+ * what leaves the balance. The other two fields are context, not the charge:
+ * `days` is the whole calendar span and `off_days_excluded` is the part that was
+ * let off — which is why `days - off_days_excluded` reaches the same number by
+ * the other route.
+ *
+ * Derived from what the field NAMES mean rather than picking one figure and
+ * hoping. `null` when there is no preview to read, so callers fall back to the
+ * calendar span rather than to a zero that would read as "this leave is free".
+ */
+function chargeableOf(preview?: LeavePreview): number | null {
+  if (!preview) return null;
+  return preview.working_days + preview.sandwich_days;
+}
+
+/* ── Range breakdown ──────────────────────────────────────────────────────── */
+
+/**
+ * What the picked range actually costs, from the server.
+ *
+ * This replaced a hardcoded line that read "Weekly offs and holidays inside the
+ * range still count as applied days." That sentence was a POLICY CLAIM the app
+ * had no way to verify — and `GET /work-calendar/leave-preview` exists, returns
+ * `off_days_excluded`, and can therefore contradict it. Stating a rule the
+ * backend may not follow is worse than saying nothing.
+ *
+ * The query lives on the SCREEN, not in here: the same answer decides the hero
+ * figure and the shortfall check, and a second copy of the query would let the
+ * headline and the breakdown disagree about the same range.
+ */
+function RangeBreakdown({
+  data,
+  loading,
+}: {
+  data?: LeavePreview;
+  loading: boolean;
+}) {
+  const { c, dark } = useTheme();
+  const still = useReducedMotion();
+
+  if (loading) {
+    return (
+      <View className="mt-3">
+        <Skeleton height={14} radius={radius.pill} />
+      </View>
+    );
+  }
+
+  // No preview is not worth an error banner — the form still works without it,
+  // the dates are already on screen, and the hero has fallen back to the
+  // calendar span.
+  if (!data) return null;
+
+  const warn = toneFor(surface.warning, dark);
+  const charged = chargeableOf(data) ?? 0;
+  const facts = [
+    { value: data.days, label: data.days === 1 ? 'calendar day' : 'calendar days' },
+    { value: charged, label: 'charged' },
+    { value: data.off_days_excluded, label: 'off excluded' },
+  ];
+
+  return (
+    <Animated.View
+      entering={still ? undefined : FadeIn.duration(200)}
+      // Keyed on the numbers so a new range re-runs the fade rather than
+      // swapping digits in place — a figure that changes silently reads as a
+      // glitch.
+      key={`${data.days}:${charged}:${data.off_days_excluded}`}
+      className="mt-3"
+    >
+      <View
+        style={{
+          backgroundColor: c.fill,
+          borderRadius: radius.well,
+          paddingVertical: space.sm + 2,
+        }}
+        className="flex-row items-center"
+      >
+        {facts.map((fact, i) => (
+          <View key={fact.label} className="flex-1 flex-row items-center">
+            {i > 0 ? (
+              <View style={{ backgroundColor: c.border }} className="h-6 w-px" />
+            ) : null}
+            <View className="flex-1 items-center">
+              <Text
+                style={{ color: c.text }}
+                className={T.cardTitleSm}
+                allowFontScaling={false}
+              >
+                {fact.value}
+              </Text>
+              <Text style={{ color: c.textMuted }} className={T.nano} numberOfLines={1}>
+                {fact.label}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* Only when it applies. A sandwich rule is the single most surprising
+          thing on an Indian leave policy, and finding out after approval is
+          how a two-day leave silently becomes four. */}
+      {data.sandwich_days > 0 ? (
+        <View
+          style={{
+            marginTop: space.sm,
+            backgroundColor: warn.bg,
+            borderRadius: radius.well,
+            borderWidth: 1,
+            borderColor: warn.border,
+          }}
+          className="flex-row items-center gap-2 px-3 py-2"
+        >
+          <CalendarRange size={13} strokeWidth={2} color={warn.tint} />
+          <Text style={{ color: warn.text }} className={`flex-1 ${T.micro}`}>
+            {data.sandwich_days} sandwich {data.sandwich_days === 1 ? 'day' : 'days'} —
+            an off day between two leave days is counted.
+          </Text>
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
 /**
  * Leave application. A pushed screen, not a sheet — it carries a date picker
  * and a multi-line field, both of which want the whole viewport, and a picker
@@ -165,7 +300,7 @@ function Field({
 export default function LeaveApplyScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { c, brand, dark, primary } = useTheme();
+  const { c, brand, dark, tint } = useTheme();
   const { width } = useWindowDimensions();
 
   const today = ymd(new Date());
@@ -179,11 +314,32 @@ export default function LeaveApplyScreen() {
   const balance = useGetMyBalanceQuery();
   const [applyLeave, { isLoading }] = useApplyLeaveMutation();
 
-  // A half day is by definition a single date, so the range collapses and the
-  // end-date field goes away rather than contradicting the toggle.
-  const days = halfDay ? 0.5 : daysBetween(from, to);
+  // A half day is a single date by definition, so the range collapses and there
+  // is nothing for the server to work out.
+  const preview = useGetLeavePreviewQuery(
+    { from, to },
+    { skip: halfDay || !from || !to },
+  );
+
+  /**
+   * What this leave actually costs.
+   *
+   * The calendar span is the FALLBACK, not the answer. It counts every day
+   * between the two dates, so a Friday-to-Monday leave read as four days when
+   * the weekend is usually let off — which then tripped the "not enough
+   * balance" warning on a request that was really two days. The server knows
+   * the working week and the holiday list; ask it, and only count days by hand
+   * when it has not answered yet.
+   */
+  const days = halfDay ? 0.5 : (chargeableOf(preview.data) ?? daysBetween(from, to));
+
   const available = type === 'unpaid' ? null : (balance.data?.[type]?.available ?? 0);
-  const short = available !== null && days > available;
+
+  // Never warn on a guess. While the preview is in flight the fallback span may
+  // be over-counting, and telling somebody they are short on days that will not
+  // be charged is worse than saying nothing for a moment.
+  const short =
+    available !== null && days > available && (halfDay || !preview.isLoading);
 
   const heroWidth = width - space.screen * 2;
   const heroHeight = 148;
@@ -380,7 +536,7 @@ export default function LeaveApplyScreen() {
                       left == null ? 'Not counted against balance' : `${left} days left`
                     }`}
                     style={({ pressed }) => ({
-                      backgroundColor: active ? primary.bg : c.card,
+                      backgroundColor: active ? tint.bg : c.card,
                       borderRadius: radius.card - 4,
                       borderWidth: active ? 1.5 : 1,
                       borderColor: active ? brand[600] : c.border,
@@ -524,13 +680,7 @@ export default function LeaveApplyScreen() {
               </View>
 
               {halfDay ? null : (
-                <View className="mt-3 flex-row items-center gap-2">
-                  <CalendarRange size={13} strokeWidth={2} color={c.textFaint} />
-                  <Text style={{ color: c.textFaint }} className={T.micro}>
-                    Weekly offs and holidays inside the range still count as applied
-                    days.
-                  </Text>
-                </View>
+                <RangeBreakdown data={preview.data} loading={preview.isLoading} />
               )}
             </View>
           </Field>

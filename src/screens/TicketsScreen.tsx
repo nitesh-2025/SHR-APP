@@ -1,4 +1,4 @@
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import {
   LifeBuoy,
   Plus,
@@ -24,6 +24,7 @@ import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useMenuNav } from "../navigation/useMenuNav";
 import { useAppSelector, selectCurrentUser } from "../store";
 import {
@@ -90,7 +91,7 @@ const FILTERS: { key: string; label: string }[] = [
 
 /* ── Row ──────────────────────────────────────────────────────────────────── */
 
-function TicketRow({ ticket }: { ticket: TicketItem }) {
+function TicketRow({ ticket, onPress }: { ticket: TicketItem; onPress: () => void }) {
   const { c, dark } = useTheme();
 
   const key = statusKey(ticket.status);
@@ -102,15 +103,20 @@ function TicketRow({ ticket }: { ticket: TicketItem }) {
   const raised = ticket.createdAt ?? ticket.created_at;
 
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${ticket.title}. ${status.label}`}
+      accessibilityHint="Opens the ticket and its replies"
+      style={({ pressed }) => ({
         backgroundColor: c.card,
         borderRadius: radius.card - 4,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
+        opacity: pressed ? 0.85 : 1,
         ...(dark ? shadow.none : shadow.soft),
-      }}
+      })}
     >
       <View className="flex-row items-start gap-3">
         <View className="flex-1">
@@ -146,7 +152,7 @@ function TicketRow({ ticket }: { ticket: TicketItem }) {
           <Badge label={`${ticket.priority} priority`} tone={priority} />
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -160,7 +166,7 @@ function TicketRow({ ticket }: { ticket: TicketItem }) {
  * data-exposure bug, not a feature.
  */
 export default function TicketsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { c, brand, dark } = useTheme();
   const user = useAppSelector(selectCurrentUser);
@@ -315,7 +321,13 @@ export default function TicketsScreen() {
             onAction={status ? () => setStatus("") : () => setComposeOpen(true)}
           />
         ) : (
-          items.map((t) => <TicketRow key={t._id} ticket={t} />)
+          items.map((t) => (
+            <TicketRow
+              key={t._id}
+              ticket={t}
+              onPress={() => navigation.navigate("Ticket", { id: t._id, title: t.title })}
+            />
+          ))
         )}
       </ScrollView>
 
