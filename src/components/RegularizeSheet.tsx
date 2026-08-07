@@ -52,7 +52,7 @@ export function RegularizeSheet({
   date: string;
   onClose: () => void;
 }) {
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint } = useTheme();
   const { height: sheetHeight } = useWindowDimensions();
   const [create, { isLoading }] = useCreateRegularizationMutation();
 
@@ -146,7 +146,7 @@ export function RegularizeSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={({ pressed }) => ({
-                  backgroundColor: active ? primary.bg : c.fill,
+                  backgroundColor: active ? tint.bg : c.fill,
                   borderRadius: radius.pill,
                   borderWidth: 1,
                   borderColor: active ? brand[600] : "transparent",

@@ -121,7 +121,7 @@ function PresenceAvatar({ user, online }: { user: ChatUser; online: boolean }) {
 export default function ChatsScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint } = useTheme();
   const { isUserOnline } = usePresence();
 
   const searchRef = useRef<TextInput>(null);
@@ -468,7 +468,7 @@ export default function ChatsScreen() {
           <ChevronLeft size={24} strokeWidth={2.2} color={c.text} />
         </Pressable>
 
-        <View className="flex-1 bottom-1 border-red-500">
+        <View className="flex-1">
           <Text
             style={{ color: c.text }}
             className={T.section}
@@ -494,7 +494,7 @@ export default function ChatsScreen() {
           accessibilityState={{ expanded: showSearch }}
           accessibilityLabel="Search chats or colleagues"
           style={{
-            backgroundColor: showSearch ? primary.bg : "transparent",
+            backgroundColor: showSearch ? tint.bg : "transparent",
             borderRadius: radius.pill,
             overflow: "hidden",
           }}
@@ -514,7 +514,7 @@ export default function ChatsScreen() {
           accessibilityState={{ expanded: showFilters }}
           accessibilityLabel="Filter conversations"
           style={{
-            backgroundColor: showFilters ? primary.bg : "transparent",
+            backgroundColor: showFilters ? tint.bg : "transparent",
             borderRadius: radius.pill,
             overflow: "hidden",
           }}

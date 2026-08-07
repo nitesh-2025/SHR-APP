@@ -34,7 +34,7 @@ export function ProfileButton({
   /** Clocked in right now — shows the green presence dot. */
   onDuty?: boolean;
 }) {
-  const { c, primary } = useTheme();
+  const { c, tint } = useTheme();
 
   const press = useSharedValue(0);
   const style = useAnimatedStyle(() => ({
@@ -61,7 +61,7 @@ export function ProfileButton({
           height: 44,
           borderRadius: 22,
           borderWidth: 1,
-          borderColor: primary.border,
+          borderColor: tint.border,
           backgroundColor: c.card,
         },
         style,

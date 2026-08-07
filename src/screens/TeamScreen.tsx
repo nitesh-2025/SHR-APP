@@ -290,7 +290,7 @@ function ContactRow({
 export default function TeamScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { c, brand, primary, dark } = useTheme();
+  const { c, brand, primary, tint, dark } = useTheme();
   const me = useAppSelector(selectCurrentUser);
   // Presence + the employee-code → chat-user-id map. This screen is the one
   // place that needs the whole directory (every teammate row is keyed by
@@ -379,7 +379,6 @@ export default function TeamScreen() {
   // the brand edge that says "this is your manager" are the only things marking
   // them out from the rows below. `toneFor` keeps the hue on a dark canvas.
   const cake = toneFor(surface.warning, dark);
-  const managerTone = toneFor(primary, dark);
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
@@ -425,7 +424,7 @@ export default function TeamScreen() {
           accessibilityRole="button"
           accessibilityLabel="Birthdays"
           style={({ pressed }) => ({
-            backgroundColor: primary.bg,
+            backgroundColor: tint.bg,
             borderRadius: radius.pill,
             opacity: pressed ? 0.7 : 1,
           })}
@@ -558,7 +557,7 @@ export default function TeamScreen() {
                   backgroundColor: c.card,
                   borderRadius: radius.card - 4,
                   borderWidth: 1,
-                  borderColor: managerTone.border,
+                  borderColor: tint.border,
                   padding: space.lg,
                   opacity: pressed && managerRecord ? 0.85 : 1,
                   ...(dark ? shadow.none : shadow.soft),

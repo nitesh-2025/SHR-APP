@@ -25,7 +25,10 @@ jobs:
   build:
     name: Build release APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # New Architecture har ABI ka C++ alag se compile karta hai. Do ABI par bhi
+    # pehla (uncached) build 40-50 min le sakta hai — 60 par wo borderline tha
+    # aur "The operation was canceled" deta tha.
+    timeout-minutes: 90
 
     steps:
       - name: Check out the repository
@@ -97,6 +100,22 @@ jobs:
           else
             npx expo prebuild --platform android --no-install
           fi
+
+      # Prebuild ka default gradle.properties chaaron ABI maangta hai
+      # (armeabi-v7a, arm64-v8a, x86, x86_64). New Architecture me har ABI ka
+      # apna CMake/ninja C++ build chalta hai, yaani 4-core runner par chaar
+      # guna kaam — wahi 60-min timeout khaa raha tha.
+      #
+      # x86 aur x86_64 sirf EMULATOR ke liye hain; kisi bhi asli phone par kaam
+      # nahi aate. Unhe hatane se native build ~aadha ho jaata hai aur APK bhi
+      # chhota. Heap bhi badhaya — runner ke paas 16 GB hai, 2 GB kanjoosi thi.
+      - name: Trim the native build (phone ABIs only)
+        run: |
+          PROPS=android/gradle.properties
+          sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a,armeabi-v7a/' "$PROPS"
+          sed -i 's/^org\.gradle\.jvmargs=.*/org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=1024m/' "$PROPS"
+          echo "--- effective gradle.properties ---"
+          grep -E 'reactNativeArchitectures|jvmargs|newArch|hermes' "$PROPS"
 
       - name: Build release APK
         run: |

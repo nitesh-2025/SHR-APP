@@ -333,7 +333,7 @@ function Section({ label, count }: { label: string; count: number }) {
 export default function BirthdayScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint } = useTheme();
   const me = useAppSelector(selectCurrentUser);
 
   /** The person being wished, plus which preset is selected. */
@@ -424,7 +424,7 @@ export default function BirthdayScreen() {
           accessibilityRole="button"
           accessibilityLabel="Team"
           style={({ pressed }) => ({
-            backgroundColor: primary.bg,
+            backgroundColor: tint.bg,
             borderRadius: radius.pill,
             opacity: pressed ? 0.7 : 1,
           })}
@@ -572,7 +572,7 @@ export default function BirthdayScreen() {
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={text}
                   style={({ pressed }) => ({
-                    backgroundColor: active ? primary.bg : c.fill,
+                    backgroundColor: active ? tint.bg : c.fill,
                     borderRadius: radius.well,
                     borderWidth: 1,
                     borderColor: active ? brand[600] : "transparent",

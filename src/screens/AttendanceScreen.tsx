@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   LogIn,
   LogOut,
   MapPin,
@@ -12,6 +13,7 @@ import {
   Smartphone,
   Timer,
   TimerReset,
+  X,
   type LucideIcon,
 } from "lucide-react-native";
 import { useMemo, useState, type ReactNode } from "react";
@@ -23,6 +25,11 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  FadeInDown,
+  useReducedMotion,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
@@ -39,9 +46,13 @@ import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import {
   useGetMyHistoryQuery,
+  useGetMyRegularizationsQuery,
   type AttendanceRecord,
   type AttendanceStatus,
   type Punch,
+  type Regularization,
+  type RegularizationStatus,
+  type RegularizationType,
 } from "../store/attendanceApi";
 import {
   radius,
@@ -54,6 +65,7 @@ import {
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import {
+  fmtDayShort,
   fmtDuration,
   fmtTime,
   monthRange,
@@ -68,7 +80,125 @@ import {
  * List is the RECORD — every day that happened, newest first.
  * Roster is the CALENDAR — the same month seen as a grid.
  */
-type View$ = "list" | "roster";
+type View$ = "list" | "roster" | "requests";
+
+/* ── Regularization requests ──────────────────────────────────────────────── */
+
+const REG_TYPE_LABEL: Record<RegularizationType, string> = {
+  missing_clock_in: "Missing clock in",
+  missing_clock_out: "Missing clock out",
+  late_waiver: "Late waiver",
+  wrong_time: "Wrong time",
+  on_duty: "On duty",
+  work_from_home: "Work from home",
+};
+
+const REG_STATUS: Record<
+  RegularizationStatus,
+  { label: string; tone: Surface; icon: LucideIcon }
+> = {
+  pending: { label: "Pending", tone: surface.warning, icon: Clock3 },
+  approved: { label: "Approved", tone: surface.success, icon: Check },
+  rejected: { label: "Rejected", tone: surface.danger, icon: X },
+};
+
+/**
+ * One regularization I raised, and what came of it.
+ *
+ * `getMyRegularizations` was never called anywhere before this: the sheet could
+ * POST a request and then it vanished — no record that it was sent, and no way
+ * to learn it had been approved or rejected. A request you cannot track is
+ * indistinguishable from one that failed to send.
+ */
+function RegularizationCard({
+  item,
+  index,
+}: {
+  item: Regularization;
+  index: number;
+}) {
+  const { c, dark } = useTheme();
+  const still = useReducedMotion();
+  const spec = REG_STATUS[item.status] ?? REG_STATUS.pending;
+  const tone = toneFor(spec.tone, dark);
+  const Icon = spec.icon;
+
+  return (
+    <Animated.View
+      entering={
+        still
+          ? undefined
+          : FadeInDown.delay(Math.min(index, 6) * 40)
+              .duration(220)
+              .easing(Easing.out(Easing.cubic))
+      }
+      style={{
+        backgroundColor: c.card,
+        borderRadius: radius.card - 4,
+        borderWidth: 1,
+        borderColor: c.border,
+        borderLeftWidth: 4,
+        borderLeftColor: tone.tint,
+        padding: space.lg,
+        ...(dark ? shadow.none : shadow.soft),
+      }}
+    >
+      <View className="flex-row items-start gap-3">
+        <View
+          style={{ backgroundColor: tone.bg, borderRadius: radius.well - 4 }}
+          className="h-9 w-9 items-center justify-center"
+        >
+          <Icon size={17} strokeWidth={2.4} color={tone.tint} />
+        </View>
+
+        <View className="flex-1">
+          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
+            {REG_TYPE_LABEL[item.type] ?? item.type}
+          </Text>
+          <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`}>
+            {fmtDayShort(item.date)}
+            {item.requested_clock_in || item.requested_clock_out
+              ? ` · ${[item.requested_clock_in, item.requested_clock_out]
+                  .filter(Boolean)
+                  .join(" – ")}`
+              : ""}
+          </Text>
+        </View>
+
+        <Badge label={spec.label} tone={spec.tone} />
+      </View>
+
+      <Text style={{ color: c.textMuted }} className={`mt-2.5 leading-5 ${T.secondary}`}>
+        {item.reason}
+      </Text>
+
+      {/* The reviewer's note is the whole point of coming back to this screen —
+          "rejected" without a reason is a dead end. */}
+      {item.status !== "pending" && (item.review_note || item.reviewer_name) ? (
+        <View
+          style={{
+            marginTop: space.md,
+            backgroundColor: tone.bg,
+            borderRadius: radius.well,
+            borderWidth: 1,
+            borderColor: tone.border,
+            padding: space.md,
+          }}
+        >
+          <Text style={{ color: tone.text }} className={T.caption}>
+            {item.review_note || `${spec.label} by ${item.reviewer_name}`}
+          </Text>
+          {item.review_note && item.reviewer_name ? (
+            <Text style={{ color: c.textMuted }} className={`mt-1 ${T.nano}`}>
+              — {item.reviewer_name}
+              {item.reviewed_at ? ` · ${fmtDayShort(item.reviewed_at)}` : ""}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
 
 /** Day-cell meaning. `none` = nothing recorded (weekend, holiday, future). */
 type DayKind = "present" | "late" | "absent" | "leave" | "holiday" | "none";
@@ -213,14 +343,14 @@ function StatCard({
 
 /** Same affordance on both tabs, so the action is learned once. */
 function RegularizeButton({ onPress }: { onPress: () => void }) {
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Request a correction for this day"
       style={({ pressed }) => ({
-        backgroundColor: primary.bg,
+        backgroundColor: tint.bg,
         borderRadius: radius.pill,
         opacity: pressed ? 0.7 : 1,
       })}
@@ -557,7 +687,7 @@ function TabPane({
 export default function AttendanceScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { c, brand, primary } = useTheme();
+  const { c, brand, tint } = useTheme();
 
   const today = new Date();
   const todayKey = ymd(today);
@@ -605,6 +735,32 @@ export default function AttendanceScreen() {
     ...range,
     limit: month === null ? 400 : 40,
   });
+
+  /**
+   * My regularizations, newest first.
+   *
+   * Not scoped to the month filter on purpose: a request raised for the 3rd can
+   * be reviewed on the 20th, and hiding it behind whichever month the LIST
+   * happens to be on is how "I never heard back" happens. Fetched only once the
+   * tab is opened.
+   */
+  const regs = useGetMyRegularizationsQuery(
+    { limit: 50 },
+    { skip: !visited.has("requests") },
+  );
+
+  const regItems = useMemo(
+    () =>
+      [...(regs.data?.items ?? [])].sort((a, b) =>
+        String(b.createdAt ?? b.date).localeCompare(String(a.createdAt ?? a.date)),
+      ),
+    [regs.data],
+  );
+
+  const pendingRegs = useMemo(
+    () => regItems.filter((r) => r.status === "pending").length,
+    [regItems],
+  );
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const byDate = useMemo(() => {
@@ -758,6 +914,9 @@ export default function AttendanceScreen() {
           segments={[
             { key: "list", label: "List" },
             { key: "roster", label: "Roster" },
+            // The count is the reason this tab exists: a pending request is
+            // something you are waiting on, and it should say so from the bar.
+            { key: "requests", label: "Requests", count: pendingRegs },
           ]}
           value={view}
           onChange={(next) => {
@@ -1136,6 +1295,57 @@ export default function AttendanceScreen() {
             </ScrollView>
           </TabPane>
         ) : null}
+
+        {/* ── Requests (regularizations) ─────────────────────────────────── */}
+        {visited.has("requests") ? (
+          <TabPane active={view === "requests"}>
+            <ScrollView
+              contentContainerStyle={{
+                paddingHorizontal: space.screen,
+                paddingBottom: bottomPad,
+                gap: space.md,
+              }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={regs.isFetching && !regs.isLoading}
+                  onRefresh={() => regs.refetch()}
+                  tintColor={brand[600]}
+                />
+              }
+            >
+              {regs.isLoading ? (
+                <>
+                  <Skeleton height={130} radius={radius.card - 4} />
+                  <Skeleton height={130} radius={radius.card - 4} />
+                </>
+              ) : regs.error ? (
+                <EmptyState
+                  icon={<PenLine size={32} strokeWidth={1.6} color={brand[600]} />}
+                  title="Could not load your requests"
+                  message={describeApiError(regs.error).title}
+                  actionLabel="Try again"
+                  onAction={() => regs.refetch()}
+                />
+              ) : regItems.length === 0 ? (
+                <EmptyState
+                  icon={<PenLine size={32} strokeWidth={1.6} color={brand[600]} />}
+                  title="No requests raised"
+                  message="Open a day on the Roster and tap Regularize when a punch is missing or wrong. Whatever you raise shows up here with its outcome."
+                  actionLabel="Go to Roster"
+                  onAction={() => {
+                    setView("roster");
+                    setVisited((v) => (v.has("roster") ? v : new Set(v).add("roster")));
+                  }}
+                />
+              ) : (
+                regItems.map((item, i) => (
+                  <RegularizationCard key={item._id} item={item} index={i} />
+                ))
+              )}
+            </ScrollView>
+          </TabPane>
+        ) : null}
       </View>
 
       <BottomNav
@@ -1189,7 +1399,7 @@ export default function AttendanceScreen() {
                   accessibilityState={{ selected: active }}
                   style={({ pressed }) => ({
                     width: "31%",
-                    backgroundColor: active ? primary.bg : c.fill,
+                    backgroundColor: active ? tint.bg : c.fill,
                     borderRadius: radius.well,
                     borderWidth: 1,
                     borderColor: active ? brand[600] : "transparent",
@@ -1232,7 +1442,7 @@ export default function AttendanceScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={({ pressed }) => ({
-                  backgroundColor: active ? primary.bg : c.fill,
+                  backgroundColor: active ? tint.bg : c.fill,
                   borderRadius: radius.well,
                   opacity: pressed ? 0.7 : 1,
                 })}

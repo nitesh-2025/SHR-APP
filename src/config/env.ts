@@ -29,6 +29,23 @@ export const LONG_BREAK_MIN = Number(
 // of silently opening a 404.
 export const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? '';
 
+/**
+ * Referral bonus paid on a successful hire, in rupees. `0` = not configured.
+ *
+ * Config rather than an API call because no recruitment endpoint knows this
+ * number today — `/jobs` has `salary_range` for the CANDIDATE, nothing for the
+ * referrer. Same contract as `TERMS_URL` above: unset means the UI says nothing
+ * rather than showing a figure nobody can honour. Printing an invented amount
+ * next to a real pipeline is the fastest way to lose the screen's credibility,
+ * and it is the one number an employee would quote back at HR.
+ *
+ * When the backend grows a real field, this becomes the fallback: read the API
+ * first, fall back to this, and the UI below needs no change.
+ */
+export const REFERRAL_REWARD = Number(
+  process.env.EXPO_PUBLIC_REFERRAL_REWARD ?? 0,
+);
+
 if (__DEV__ && !RAW_BASE_URL) {
   console.warn(
     '[env] EXPO_PUBLIC_BASE_URL is not set — every API call will fail. ' +

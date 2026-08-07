@@ -42,7 +42,7 @@ import {
   Segmented,
   Skeleton,
 } from "../components/ui";
-import { describeApiError } from "../lib/apiError";
+import { describeApiError, toastApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useMenuNav } from "../navigation/useMenuNav";
@@ -752,7 +752,7 @@ function LeaveCard({
 export default function LeaveScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { c, brand, primary } = useTheme();
+  const { c, brand, primary, tint } = useTheme();
   const { width } = useWindowDimensions();
 
   const today = new Date();
@@ -876,7 +876,7 @@ export default function LeaveScreen() {
       setConfirm(null);
       toast.success("Leave request withdrawn");
     } catch (e) {
-      toast.error(describeApiError(e).title);
+      toast.error(...toastApiError(e));
     }
   };
 
@@ -1344,7 +1344,7 @@ export default function LeaveScreen() {
                   accessibilityState={{ selected: active }}
                   style={({ pressed }) => ({
                     width: "31%",
-                    backgroundColor: active ? primary.bg : c.fill,
+                    backgroundColor: active ? tint.bg : c.fill,
                     borderRadius: radius.well,
                     borderWidth: 1,
                     borderColor: active ? brand[600] : "transparent",
@@ -1387,7 +1387,7 @@ export default function LeaveScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={({ pressed }) => ({
-                  backgroundColor: active ? primary.bg : c.fill,
+                  backgroundColor: active ? tint.bg : c.fill,
                   borderRadius: radius.well,
                   opacity: pressed ? 0.7 : 1,
                 })}

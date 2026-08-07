@@ -1,6 +1,7 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  BadgeCheck,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -10,6 +11,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  Sparkles,
   UserRoundCog,
   type LucideIcon,
 } from "lucide-react-native";
@@ -34,9 +36,10 @@ import { useMenuNav } from "../navigation/useMenuNav";
 import { selectCurrentUser, useAppDispatch, useAppSelector } from "../store";
 import { useGetMyProfileQuery } from "../store/employeesApi";
 import { clearCredentials } from "../store/authSlice";
-import { danger, radius, shadow, space } from "../theme/colors";
+import { danger, radius, shadow, space, toneFor } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
+import { scoreColor, scoreLabel, scoreSurface } from "../utils/profileScore";
 
 interface Entry {
   key: string;
@@ -48,11 +51,17 @@ interface Entry {
 }
 
 // Identity first, then money, then paperwork, then account controls.
+//
+// Every row above "Documents" opens the SAME spec-driven editor
+// (`ProfileEditScreen`) on a different section, prefilled from
+// `GET /employees/me/profile` and saved through `PATCH /employees/me`.
 const ENTRIES: Entry[] = [
   { key: "personal", label: "Personal Information", icon: CircleUserRound },
   { key: "bank", label: "Bank Details", icon: Landmark },
-  { key: "documents", label: "Documents", icon: FileText },
+  { key: "statutory", label: "Statutory & IDs", icon: BadgeCheck },
+  { key: "skills", label: "Skills", icon: Sparkles },
   { key: "emergency", label: "Emergency Contact", icon: UserRoundCog },
+  { key: "documents", label: "Documents", icon: FileText },
   { key: "password", label: "Change Password", icon: KeyRound },
   { key: "privacy", label: "Privacy Policy", icon: ShieldCheck },
 ];
@@ -88,6 +97,143 @@ function CardArcs({ width, height }: { width: number; height: number }) {
         ))}
       </Svg>
     </View>
+  );
+}
+
+/* ── Completeness ─────────────────────────────────────────────────────────── */
+
+const RING = 58;
+const RING_STROKE = 6;
+const RING_R = (RING - RING_STROKE) / 2;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * Profile completeness, as a traffic light.
+ *
+ * The bar used to be brand green at every value, which told you the number and
+ * nothing else — 34% and 96% looked equally fine. The band colour is the whole
+ * point: red below 50, amber to 75, green above. See `utils/profileScore`.
+ *
+ * The ring carries the figure and the bar carries the same value again, on
+ * purpose: the ring is what you see from across the screen, the bar is what
+ * makes "a bit more" legible when two visits are a few fields apart.
+ */
+function CompletenessCard({
+  score,
+  missing,
+  onPress,
+}: {
+  score: number;
+  missing?: string[];
+  onPress: () => void;
+}) {
+  const { c, dark } = useTheme();
+
+  const pct = Math.min(100, Math.max(0, Math.round(score)));
+  const ink = scoreColor(pct);
+  const tone = toneFor(scoreSurface(pct), dark);
+  const done = pct >= 100;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Profile ${pct} percent complete. ${scoreLabel(pct)}`}
+      accessibilityHint={done ? undefined : "Opens your personal information"}
+      style={({ pressed }) => ({
+        marginTop: space.lg,
+        backgroundColor: c.card,
+        borderRadius: radius.card,
+        borderWidth: 1,
+        borderColor: c.border,
+        padding: space.lg,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      <View className="flex-row items-center gap-3.5">
+        <View style={{ width: RING, height: RING }}>
+          <Svg width={RING} height={RING}>
+            <Circle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={RING_R}
+              stroke={c.fill}
+              strokeWidth={RING_STROKE}
+              fill="none"
+            />
+            {/* Rotated so the arc starts at 12 o'clock rather than 3. */}
+            <Circle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={RING_R}
+              stroke={ink}
+              strokeWidth={RING_STROKE}
+              strokeLinecap="round"
+              strokeDasharray={RING_C}
+              strokeDashoffset={RING_C * (1 - pct / 100)}
+              fill="none"
+              transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+            />
+          </Svg>
+          <View
+            style={{ position: "absolute", inset: 0 }}
+            className="items-center justify-center"
+          >
+            <Text
+              style={{ color: ink }}
+              className="font-display text-[15px]"
+              allowFontScaling={false}
+            >
+              {pct}%
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-1">
+          <Text style={{ color: c.text }} className={T.cardTitleSm}>
+            {scoreLabel(pct)}
+          </Text>
+          <Text
+            style={{ color: c.textMuted }}
+            className={`mt-0.5 ${T.micro}`}
+            numberOfLines={1}
+          >
+            {done
+              ? "Everything HR asks for is on file."
+              : "Tap to fill in what is left."}
+          </Text>
+
+          <View className="mt-2">
+            <ProgressBar value={pct / 100} color={ink} height={6} />
+          </View>
+        </View>
+
+        {done ? null : (
+          <ChevronRight size={17} strokeWidth={2} color={c.textFaint} />
+        )}
+      </View>
+
+      {/* The server already names what is missing — repeating the first few
+          beats "add more details" by a mile. */}
+      {!done && missing?.length ? (
+        <View
+          style={{
+            marginTop: space.md,
+            backgroundColor: tone.bg,
+            borderRadius: radius.well,
+            borderWidth: 1,
+            borderColor: tone.border,
+            paddingHorizontal: space.md,
+            paddingVertical: space.sm,
+          }}
+        >
+          <Text style={{ color: tone.text }} className={T.micro} numberOfLines={2}>
+            Missing: {missing.slice(0, 4).join(", ")}
+            {missing.length > 4 ? ` +${missing.length - 4} more` : ""}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -291,58 +437,20 @@ export default function ProfileScreen() {
 
         {/* ── Completeness ─────────────────────────────────────────────────
             Server-computed (`profile_score`), so it counts the same fields HR
-            counts. Hidden entirely at 100% and when the server sends no score —
-            a full bar is a bar that has nothing left to say, and a bar built
-            from a guessed denominator is worse than none. */}
-        {typeof profile.data?.profile_score === "number" &&
-        profile.data.profile_score < 100 ? (
-          <Pressable
+            counts — a bar built from a guessed denominator is worse than none,
+            which is why it renders nothing when the server sends no score.
+
+            It no longer hides at 100%. Vanishing at the finish line is the one
+            moment the meter had something good to report, and its absence read
+            as "the card failed to load" rather than "you are done". */}
+        {typeof profile.data?.profile_score === "number" ? (
+          <CompletenessCard
+            score={profile.data.profile_score}
+            missing={profile.data.profile_score_meta?.missing}
             onPress={() =>
               navigation.navigate("ProfileEdit", { section: "personal" })
             }
-            accessibilityRole="button"
-            accessibilityLabel={`Profile ${profile.data.profile_score}% complete. Fill in the rest`}
-            style={({ pressed }) => ({
-              marginTop: space.lg,
-              backgroundColor: c.card,
-              borderRadius: radius.card,
-              borderWidth: 1,
-              borderColor: c.border,
-              padding: space.lg,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <View className="flex-row items-center justify-between">
-              <Text style={{ color: c.text }} className={T.cardTitleSm}>
-                Profile {profile.data.profile_score}% complete
-              </Text>
-              <ChevronRight size={17} strokeWidth={2} color={c.textFaint} />
-            </View>
-
-            <View className="mt-2.5">
-              <ProgressBar
-                value={profile.data.profile_score / 100}
-                color={brand[600]}
-                height={6}
-              />
-            </View>
-
-            {/* The server already names what is missing — repeating the first
-                few beats "add more details" by a mile. */}
-            {profile.data.profile_score_meta?.missing?.length ? (
-              <Text
-                style={{ color: c.textMuted }}
-                className={`mt-2 ${T.micro}`}
-                numberOfLines={2}
-              >
-                Missing:{" "}
-                {profile.data.profile_score_meta.missing.slice(0, 4).join(", ")}
-                {profile.data.profile_score_meta.missing.length > 4
-                  ? ` +${profile.data.profile_score_meta.missing.length - 4} more`
-                  : ""}
-              </Text>
-            ) : null}
-          </Pressable>
+          />
         ) : null}
 
         {/* ── Shift ────────────────────────────────────────────────────────
