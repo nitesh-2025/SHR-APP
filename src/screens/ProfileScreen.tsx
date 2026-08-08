@@ -62,7 +62,6 @@ const ENTRIES: Entry[] = [
   { key: "skills", label: "Skills", icon: Sparkles },
   { key: "emergency", label: "Emergency Contact", icon: UserRoundCog },
   { key: "documents", label: "Documents", icon: FileText },
-  { key: "password", label: "Change Password", icon: KeyRound },
   { key: "privacy", label: "Privacy Policy", icon: ShieldCheck },
 ];
 
@@ -161,7 +160,6 @@ function CompletenessCard({
               strokeWidth={RING_STROKE}
               fill="none"
             />
-            {/* Rotated so the arc starts at 12 o'clock rather than 3. */}
             <Circle
               cx={RING / 2}
               cy={RING / 2}
@@ -212,27 +210,6 @@ function CompletenessCard({
           <ChevronRight size={17} strokeWidth={2} color={c.textFaint} />
         )}
       </View>
-
-      {/* The server already names what is missing — repeating the first few
-          beats "add more details" by a mile. */}
-      {!done && missing?.length ? (
-        <View
-          style={{
-            marginTop: space.md,
-            backgroundColor: tone.bg,
-            borderRadius: radius.well,
-            borderWidth: 1,
-            borderColor: tone.border,
-            paddingHorizontal: space.md,
-            paddingVertical: space.sm,
-          }}
-        >
-          <Text style={{ color: tone.text }} className={T.micro} numberOfLines={2}>
-            Missing: {missing.slice(0, 4).join(", ")}
-            {missing.length > 4 ? ` +${missing.length - 4} more` : ""}
-          </Text>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -389,11 +366,11 @@ export default function ProfileScreen() {
           end={{ x: 1, y: 1 }}
           style={{
             height: cardHeight,
-            borderRadius: radius.card,
+            borderRadius: 4,
+            marginBottom: space.lg,
             paddingHorizontal: space.lg + 2,
             justifyContent: "center",
             overflow: "hidden",
-            ...shadow.card,
           }}
         >
           <CardArcs width={cardWidth} height={cardHeight} />
@@ -470,10 +447,6 @@ export default function ProfileScreen() {
         <View
           style={{
             marginTop: space.lg,
-            backgroundColor: c.card,
-            borderRadius: radius.card,
-            borderWidth: 1,
-            borderColor: c.border,
             overflow: "hidden",
           }}
         >

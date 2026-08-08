@@ -1,14 +1,14 @@
-import { CalendarClock, Clock3, Hourglass } from 'lucide-react-native';
-import { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { CalendarClock, Clock3, Hourglass } from "lucide-react-native";
+import { useMemo } from "react";
+import { Text, View } from "react-native";
 
-import { shiftLabel, shiftMinutes } from './AttendanceCard';
-import { Skeleton } from './ui';
-import { useGetMyHistoryQuery } from '../store/attendanceApi';
-import { radius, space, surface, type Surface } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { fmtDuration } from '../utils/date';
+import { shiftLabel, shiftMinutes } from "./AttendanceCard";
+import { Skeleton } from "./ui";
+import { useGetMyHistoryQuery } from "../store/attendanceApi";
+import { radius, space, surface, type Surface } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { fmtDuration } from "../utils/date";
 
 /** Enough recent days to be sure of finding one that carries a shift window. */
 const LOOKBACK = 20;
@@ -29,7 +29,11 @@ function Fact({
     <View className="flex-1 flex-row items-center gap-2.5">
       <Icon size={20} strokeWidth={2} color={tone.tint} />
       <View className="flex-1">
-        <Text style={{ color: c.textMuted }} className={T.micro} numberOfLines={1}>
+        <Text
+          style={{ color: c.textMuted }}
+          className={T.micro}
+          numberOfLines={1}
+        >
           {label}
         </Text>
         <Text
@@ -79,10 +83,6 @@ export function ShiftCard() {
   return (
     <View
       style={{
-        backgroundColor: c.card,
-        borderRadius: radius.card,
-        borderWidth: 1,
-        borderColor: c.border,
         padding: space.lg,
       }}
     >
@@ -97,7 +97,7 @@ export function ShiftCard() {
             className={`mt-0.5 ${T.cardTitle}`}
             numberOfLines={1}
           >
-            {window ?? 'Not assigned'}
+            {window ?? "Not assigned"}
           </Text>
         </View>
       </View>
@@ -114,7 +114,7 @@ export function ShiftCard() {
         <Fact
           icon={Clock3}
           label="Grace"
-          value={grace ? `${grace} min` : '—'}
+          value={grace ? `${grace} min` : "—"}
           tone={surface.warning}
         />
       </View>

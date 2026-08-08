@@ -196,117 +196,252 @@ export function BottomNav({
   onSelect,
 }: {
   /**
-   * The highlighted tab, or `null` for a screen that has no tab of its own
-   * (Leave, Team, Referrals…). Defaulting those to `home` lit the wrong tab and
-   * made the bar say you were somewhere you were not.
+   * Highlighted tab.
+   *
+   * Use null for screens that do not belong
+   * to a bottom navigation tab.
    */
   active?: NavKey | null;
+
   onSelect: (key: NavKey | "apply") => void;
 }) {
   const insets = useSafeAreaInsets();
+
   const { c, brand, dark } = useTheme();
+
   const [punchOpen, setPunchOpen] = useState(false);
 
-  /* ── Chat badge ─────────────────────────────────────────────────────────
-     Off the same cached `Threads` query every chat screen reads, so the bar
-     costs no extra request and `useRealtime` keeps it live: the badge drops
-     the moment the conversation is opened on ANY device.
-
-     A server that returns threads without per-thread counts still has to say
-     something is waiting, hence "New" — a badge that silently disappears
-     because the number was 0 is worse than an unnumbered one. */
+  /*
+   * ─────────────────────────────────────────────
+   * CHAT UNREAD BADGE
+   * ─────────────────────────────────────────────
+   *
+   * Uses the same cached threads query used by
+   * the chat screens.
+   */
   const { data: threads } = useGetThreadsQuery();
+
   const chatBadge = (() => {
     const list = threads ?? [];
-    const total = list.reduce((n, t) => n + (t.unread || 0), 0);
-    if (total > 0) return total > 99 ? "99+" : String(total);
-    return "";
+
+    const total = list.reduce(
+      (count, thread) => count + (thread.unread || 0),
+      0,
+    );
+
+    if (total <= 0) {
+      return "";
+    }
+
+    return total > 99 ? "99+" : String(total);
   })();
 
+  /*
+   * ─────────────────────────────────────────────
+   * FAB PRESS ANIMATION
+   * ─────────────────────────────────────────────
+   */
+
   const press = useSharedValue(0);
+
   const fabStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - press.value * 0.08 }],
+    transform: [
+      {
+        scale: 1 - press.value * 0.08,
+      },
+    ],
   }));
-  const to = (v: number) => withSpring(v, { damping: 18, stiffness: 320 });
+
+  const springTo = (value: number) =>
+    withSpring(value, {
+      damping: 18,
+      stiffness: 320,
+    });
 
   return (
     <>
+      {/* ============================================================
+          BOTTOM NAV
+          ============================================================ */}
+
       <View
         className="absolute inset-x-0 bottom-0"
         style={{
+          /*
+           * Important:
+           * Don't use transparent background here.
+           * White surface is what makes the nav clearly visible
+           * against a light screen.
+           */
+          backgroundColor: dark ? c.card : "#FFFFFF",
+
           paddingBottom: insets.bottom,
-          backgroundColor: c.card,
+
           borderTopLeftRadius: 28,
           borderTopRightRadius: 28,
-          // No top border in light mode — the shadow already separates the bar
-          // from the canvas, and a hairline under a 28px curve reads as a seam.
-          borderTopWidth: dark ? 1 : 0,
-          borderTopColor: c.border,
-          ...shadow.floating,
+
+          /*
+           * Light mode needs an actual boundary.
+           */
+          borderTopWidth: 1,
+          borderTopColor: dark ? c.border : "#E5E7EB",
+
+          /*
+           * Small side boundary makes the floating surface
+           * more obvious on white screens.
+           */
+          borderLeftWidth: dark ? 0 : 1,
+          borderRightWidth: dark ? 0 : 1,
+
+          /*
+           * Shadow
+           */
+          shadowColor: dark ? "#000000" : "#64748B",
+
+          shadowOpacity: dark ? 0.35 : 0.16,
+
+          shadowRadius: dark ? 14 : 18,
+
+          shadowOffset: {
+            width: 0,
+            height: -7,
+          },
+
+          elevation: dark ? 12 : 14,
+
+          /*
+           * Make sure nav stays above page content.
+           */
+          zIndex: 50,
         }}
       >
+        {/* ========================================================
+            NAV ITEMS
+            ======================================================== */}
+
         <View
-          style={{ height: BOTTOM_NAV_HEIGHT }}
-          className="flex-row items-center"
+          style={{
+            height: BOTTOM_NAV_HEIGHT,
+
+            flexDirection: "row",
+
+            alignItems: "center",
+          }}
         >
-          {LEFT.map((t) => (
+          {/* LEFT ITEMS */}
+
+          {LEFT.map((tab) => (
             <Item
-              key={t.key}
-              tab={t}
-              active={t.key === active}
-              onPress={() => onSelect(t.key)}
+              key={tab.key}
+              tab={tab}
+              active={tab.key === active}
+              onPress={() => onSelect(tab.key)}
             />
           ))}
 
-          {/* Reserves the slot the button straddles, so the four tabs stay
-              evenly spaced instead of crowding under it. */}
-          <View style={{ width: FAB_SIZE + 14 }} />
+          {/* ======================================================
+              FAB RESERVED SPACE
 
-          {RIGHT.map((t) => (
+              Prevents the tabs from getting squeezed beneath
+              the center button.
+              ====================================================== */}
+
+          <View
+            style={{
+              width: FAB_SIZE + 14,
+            }}
+          />
+
+          {/* RIGHT ITEMS */}
+
+          {RIGHT.map((tab) => (
             <Item
-              key={t.key}
-              tab={t}
-              active={t.key === active}
-              badge={t.key === "chat" ? chatBadge : null}
-              onPress={() => onSelect(t.key)}
+              key={tab.key}
+              tab={tab}
+              active={tab.key === active}
+              badge={tab.key === "chat" ? chatBadge : null}
+              onPress={() => onSelect(tab.key)}
             />
           ))}
         </View>
 
-        {/* ── Punch button ─────────────────────────────────────────────── */}
+        {/* ========================================================
+            CENTER FAB
+            ======================================================== */}
+
         <Animated.View
           style={[
-            { position: "absolute", alignSelf: "center", top: -FAB_LIFT },
+            {
+              position: "absolute",
+
+              alignSelf: "center",
+
+              top: -FAB_LIFT,
+
+              /*
+               * Keep FAB above nav.
+               */
+              zIndex: 100,
+              elevation: 20,
+            },
+
             fabStyle,
           ]}
         >
           <Pressable
             onPress={() => setPunchOpen(true)}
             onPressIn={() => {
-              press.value = to(1);
+              press.value = springTo(1);
             }}
             onPressOut={() => {
-              press.value = to(0);
+              press.value = springTo(0);
             }}
             accessibilityRole="button"
             accessibilityLabel="Attendance actions"
             style={{
               width: FAB_SIZE,
               height: FAB_SIZE,
+
               borderRadius: FAB_SIZE / 2,
+
               backgroundColor: brand[600],
-              // Ring in the BAR's colour, so the circle reads as punched
-              // through the bar rather than stuck on top of it.
+
+              /*
+               * White ring in light mode.
+               * Card color in dark mode.
+               */
               borderWidth: 5,
-              borderColor: c.card,
-              ...shadow.card,
+
+              borderColor: dark ? c.card : "#FFFFFF",
+
+              /*
+               * FAB shadow
+               */
+              shadowColor: dark ? "#000000" : brand[600],
+
+              shadowOpacity: dark ? 0.35 : 0.28,
+
+              shadowRadius: 10,
+
+              shadowOffset: {
+                width: 0,
+                height: 5,
+              },
+
+              elevation: 10,
+
+              alignItems: "center",
+              justifyContent: "center",
             }}
-            className="items-center justify-center"
           >
-            <Plus size={26} strokeWidth={2.6} color="#FFFFFF" />
+            <Plus size={25} strokeWidth={2.7} color="#FFFFFF" />
           </Pressable>
         </Animated.View>
       </View>
+
+      {/* ==========================================================
+          PUNCH SHEET
+          ========================================================== */}
 
       <PunchSheet visible={punchOpen} onClose={() => setPunchOpen(false)} />
     </>

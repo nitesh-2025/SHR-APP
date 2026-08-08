@@ -345,7 +345,6 @@ function BalanceHero({
         paddingVertical: space.lg,
         justifyContent: "space-between",
         overflow: "hidden",
-        ...shadow.card,
       }}
     >
       <HeroArt width={width} height={HERO_HEIGHT} />
@@ -361,7 +360,10 @@ function BalanceHero({
           </Text>
 
           <View className="mt-1 flex-row items-baseline gap-2">
-            <Text className={`text-white ${T.kpiHero}`} allowFontScaling={false}>
+            <Text
+              className={`text-white ${T.kpiHero}`}
+              allowFontScaling={false}
+            >
               {totals.available}
             </Text>
             <Text className={`text-white/85 ${T.cardTitle}`}>
@@ -369,7 +371,10 @@ function BalanceHero({
             </Text>
           </View>
 
-          <Text className={`mt-0.5 text-white/75 ${T.secondary}`} numberOfLines={1}>
+          <Text
+            className={`mt-0.5 text-white/75 ${T.secondary}`}
+            numberOfLines={1}
+          >
             {pending > 0
               ? `${pending} request${pending === 1 ? "" : "s"} awaiting approval`
               : "Nothing waiting on your manager"}
