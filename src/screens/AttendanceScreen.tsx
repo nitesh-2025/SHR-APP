@@ -1,19 +1,23 @@
 import { useNavigation } from "@react-navigation/native";
 import {
   CalendarDays,
+  CalendarPlus,
   CalendarX,
   Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
   EllipsisVertical,
+  List as ListIcon,
   LogIn,
   LogOut,
   MapPin,
+  MessageSquareText,
   PenLine,
   Smartphone,
   Timer,
   TimerReset,
+  UserRound,
   X,
   type LucideIcon,
 } from "lucide-react-native";
@@ -38,13 +42,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { BottomSheet } from "../components/BottomSheet";
 import { RegularizeSheet } from "../components/RegularizeSheet";
-import {
-  Badge,
-  EmptyState,
-  RangeChip,
-  Segmented,
-  Skeleton,
-} from "../components/ui";
+import { Badge, EmptyState, RangeChip, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import {
@@ -85,6 +83,38 @@ import {
  */
 type View$ = "list" | "roster" | "requests";
 
+/**
+ * The three views, as menu rows.
+ *
+ * Single source for the overflow menu AND the header subtitle, so the label you
+ * pick is the label you then see under the title.
+ */
+const VIEWS: {
+  key: View$;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: "list",
+    label: "List",
+    hint: "Every day, newest first",
+    icon: ListIcon,
+  },
+  {
+    key: "roster",
+    label: "Roster",
+    hint: "The month as a calendar",
+    icon: CalendarDays,
+  },
+  {
+    key: "requests",
+    label: "Requests",
+    hint: "Regularizations you raised",
+    icon: PenLine,
+  },
+];
+
 /* ── Regularization requests ──────────────────────────────────────────────── */
 
 const REG_TYPE_LABEL: Record<RegularizationType, string> = {
@@ -114,99 +144,343 @@ const REG_STATUS: Record<
  * indistinguishable from one that failed to send.
  */
 function RegularizationCard({
+  expanded,
+  onToggle,
   item,
   index,
 }: {
+  expanded: boolean;
+  onToggle: () => void;
   item: Regularization;
   index: number;
 }) {
   const { c, dark } = useTheme();
   const still = useReducedMotion();
+
   const spec = REG_STATUS[item.status] ?? REG_STATUS.pending;
   const tone = toneFor(spec.tone, dark);
   const Icon = spec.icon;
 
   return (
-    <Animated.View
-      entering={
-        still
-          ? undefined
-          : FadeInDown.delay(Math.min(index, 6) * 40)
-              .duration(220)
-              .easing(Easing.out(Easing.cubic))
-      }
-      style={{
-        backgroundColor: c.card,
-        borderRadius: radius.card - 4,
-        borderWidth: 1,
-        borderColor: c.border,
-        borderLeftWidth: 4,
-        borderLeftColor: tone.tint,
-        padding: space.lg,
-        ...(dark ? shadow.none : shadow.soft),
-      }}
-    >
-      <View className="flex-row items-start gap-3">
-        <View
-          style={{ backgroundColor: tone.bg, borderRadius: radius.well - 4 }}
-          className="h-9 w-9 items-center justify-center"
-        >
-          <Icon size={17} strokeWidth={2.4} color={tone.tint} />
-        </View>
-
-        <View className="flex-1">
-          <Text
-            style={{ color: c.text }}
-            className={T.cardTitleSm}
-            numberOfLines={1}
-          >
-            {REG_TYPE_LABEL[item.type] ?? item.type}
-          </Text>
-          <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`}>
-            {fmtDayShort(item.date)}
-            {item.requested_clock_in || item.requested_clock_out
-              ? ` · ${[item.requested_clock_in, item.requested_clock_out]
-                  .filter(Boolean)
-                  .join(" – ")}`
-              : ""}
-          </Text>
-        </View>
-
-        <Badge label={spec.label} tone={spec.tone} />
-      </View>
-
-      <Text
-        style={{ color: c.textMuted }}
-        className={`mt-2.5 leading-5 ${T.secondary}`}
+    <Pressable onPress={onToggle} accessibilityRole="button">
+      <Animated.View
+        entering={
+          still
+            ? undefined
+            : FadeInDown.delay(Math.min(index, 6) * 40)
+                .duration(240)
+                .easing(Easing.out(Easing.cubic))
+        }
+        style={{
+          backgroundColor: c.card,
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: c.border,
+          overflow: "hidden",
+          ...(dark ? shadow.none : shadow.soft),
+        }}
       >
-        {item.reason}
-      </Text>
+        <View />
 
-      {/* The reviewer's note is the whole point of coming back to this screen —
-          "rejected" without a reason is a dead end. */}
-      {item.status !== "pending" && (item.review_note || item.reviewer_name) ? (
-        <View
-          style={{
-            marginTop: space.md,
-            backgroundColor: tone.bg,
-            borderRadius: radius.well,
-            borderWidth: 1,
-            borderColor: tone.border,
-            padding: space.md,
-          }}
-        >
-          <Text style={{ color: tone.text }} className={T.caption}>
-            {item.review_note || `${spec.label} by ${item.reviewer_name}`}
-          </Text>
-          {item.review_note && item.reviewer_name ? (
-            <Text style={{ color: c.textMuted }} className={`mt-1 ${T.nano}`}>
-              — {item.reviewer_name}
-              {item.reviewed_at ? ` · ${fmtDayShort(item.reviewed_at)}` : ""}
-            </Text>
+        <View style={{ padding: space.lg }}>
+          <View className="flex-row items-start">
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: tone.bg,
+                borderWidth: 1,
+                borderColor: tone.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon size={20} strokeWidth={2.1} color={tone.tint} />
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                marginLeft: 12,
+                marginRight: 10,
+              }}
+            >
+              <Text
+                style={{
+                  color: c.text,
+                  fontSize: 15,
+                  fontWeight: "700",
+                  letterSpacing: -0.15,
+                }}
+                numberOfLines={1}
+              >
+                {REG_TYPE_LABEL[item.type] ?? item.type}
+              </Text>
+
+              {/* Date */}
+              <View className="mt-1.5 flex-row items-center gap-1.5">
+                <CalendarDays size={12} strokeWidth={2} color={c.textFaint} />
+
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontSize: 11,
+                    fontWeight: "500",
+                  }}
+                >
+                  {fmtDayShort(item.date)}
+                </Text>
+
+                {(item.requested_clock_in || item.requested_clock_out) && (
+                  <>
+                    <View
+                      style={{
+                        width: 3,
+                        height: 3,
+                        borderRadius: 2,
+                        backgroundColor: c.textFaint,
+                      }}
+                    />
+
+                    <Text
+                      style={{
+                        color: c.textMuted,
+                        fontSize: 11,
+                        fontWeight: "600",
+                      }}
+                      numberOfLines={1}
+                    >
+                      {[item.requested_clock_in, item.requested_clock_out]
+                        .filter(Boolean)
+                        .join(" – ")}
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Status */}
+            <View
+              style={{
+                paddingHorizontal: 9,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: tone.bg,
+                borderWidth: 1,
+                borderColor: tone.border,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: tone.tint,
+                }}
+              />
+
+              <Text
+                style={{
+                  color: tone.text,
+                  fontSize: 10,
+                  fontWeight: "700",
+                }}
+              >
+                {spec.label}
+              </Text>
+            </View>
+          </View>
+
+          {/* ── Requested Time ──────────────────────────── */}
+          {(item.requested_clock_in || item.requested_clock_out) && (
+            <View
+              style={{
+                marginTop: 14,
+                padding: 10,
+                borderRadius: 14,
+                backgroundColor: c.fill,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <Clock3 size={15} strokeWidth={2} color={c.textMuted} />
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: 9,
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.textFaint,
+                    fontSize: 9,
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Requested time
+                </Text>
+
+                <Text
+                  style={{
+                    color: c.text,
+                    fontSize: 12,
+                    fontWeight: "600",
+                    marginTop: 2,
+                  }}
+                >
+                  {[
+                    item.requested_clock_in && `In ${item.requested_clock_in}`,
+                    item.requested_clock_out &&
+                      `Out ${item.requested_clock_out}`,
+                  ]
+                    .filter(Boolean)
+                    .join("   ·   ")}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {expanded ? (
+            <>
+              <View style={{ marginTop: 15 }}>
+                <Text
+                  style={{
+                    color: c.textFaint,
+                    fontSize: 10,
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                    marginBottom: 5,
+                  }}
+                >
+                  Reason
+                </Text>
+
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontSize: 13,
+                    lineHeight: 19,
+                    fontWeight: "500",
+                  }}
+                >
+                  {item.reason}
+                </Text>
+              </View>
+
+              {item.status !== "pending" &&
+              (item.review_note || item.reviewer_name) ? (
+                <View
+                  style={{
+                    marginTop: 15,
+                    padding: 12,
+                    borderRadius: 15,
+                    backgroundColor: tone.bg,
+                    borderWidth: 1,
+                    borderColor: tone.border,
+                  }}
+                >
+                  <View className="flex-row items-center gap-2">
+                    <View
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: `${tone.tint}18`,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <MessageSquareText
+                        size={13}
+                        strokeWidth={2}
+                        color={tone.tint}
+                      />
+                    </View>
+
+                    <Text
+                      style={{
+                        color: tone.text,
+                        fontSize: 10,
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      Reviewer note
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: tone.text,
+                      fontSize: 12,
+                      lineHeight: 18,
+                      fontWeight: "500",
+                      marginTop: 9,
+                    }}
+                  >
+                    {item.review_note ||
+                      `${spec.label} by ${item.reviewer_name}`}
+                  </Text>
+
+                  {item.review_note && item.reviewer_name ? (
+                    <View
+                      className="mt-2 flex-row items-center"
+                      style={{ gap: 5 }}
+                    >
+                      <UserRound
+                        size={11}
+                        strokeWidth={2}
+                        color={c.textFaint}
+                      />
+
+                      <Text
+                        style={{
+                          color: c.textMuted,
+                          fontSize: 10,
+                        }}
+                      >
+                        {item.reviewer_name}
+                      </Text>
+
+                      {item.reviewed_at ? (
+                        <>
+                          <View
+                            style={{
+                              width: 3,
+                              height: 3,
+                              borderRadius: 2,
+                              backgroundColor: c.textFaint,
+                            }}
+                          />
+
+                          <Text
+                            style={{
+                              color: c.textMuted,
+                              fontSize: 10,
+                            }}
+                          >
+                            {fmtDayShort(item.reviewed_at)}
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
           ) : null}
         </View>
-      ) : null}
-    </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -948,6 +1222,9 @@ export default function AttendanceScreen() {
           <ChevronLeft size={24} strokeWidth={2.2} color={c.text} />
         </Pressable>
 
+        {/* The title carries the active view now that the segmented control is
+            gone: with the tabs behind a menu, "Attendance" alone would leave no
+            way to tell the roster from the request list at a glance. */}
         <View className="flex-1">
           <Text
             style={{ color: c.text, fontFamily: "Inter_800SemiBold" }}
@@ -955,6 +1232,14 @@ export default function AttendanceScreen() {
             numberOfLines={1}
           >
             Attendance
+          </Text>
+          <Text
+            style={{ color: c.textMuted }}
+            className={T.caption}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
+            {VIEWS.find((v) => v.key === view)?.label}
           </Text>
         </View>
 
@@ -979,81 +1264,42 @@ export default function AttendanceScreen() {
           />
         )}
 
-        <View style={{ position: "relative" }}>
-          <Pressable onPress={() => setMenuOpen(!menuOpen)}>
-            <EllipsisVertical size={22} color={c.text} />
-          </Pressable>
-
-          {menuOpen && (
+        {/* ── View menu ────────────────────────────────────────────────────
+            The three tabs used to sit in a full-width segmented control under
+            the header, which cost a 48px band of every screen to show two
+            options nobody was about to switch to. Behind the overflow menu they
+            cost nothing — but a pending request would then be invisible, so the
+            count rides out here as a dot on the trigger. */}
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={
+            pendingRegs
+              ? `Change view. ${pendingRegs} pending requests`
+              : "Change view"
+          }
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          className="-mr-1 pl-1"
+        >
+          <EllipsisVertical size={22} strokeWidth={2.2} color={c.text} />
+          {pendingRegs ? (
             <View
               style={{
                 position: "absolute",
-                top: 35,
-                borderWidth: 1,
-                borderColor: c.border,
+                top: -2,
                 right: 0,
-                width: 180,
-                backgroundColor: "#fff",
-                borderRadius: 6,
-                elevation: 8,
-                shadowColor: "#000",
-                shadowOpacity: 0.15,
-                zIndex: 1000,
-                shadowRadius: 10,
-                shadowOffset: { width: 0, height: 4 },
-                overflow: "hidden",
+                width: 9,
+                height: 9,
+                borderRadius: 999,
+                backgroundColor: surface.danger.tint,
+                borderWidth: 1.5,
+                borderColor: c.bg,
               }}
-            >
-              <Pressable style={{ padding: 10, paddingLeft: 15 }}>
-                <Text>Regularization</Text>
-              </Pressable>
-
-              <Pressable
-                style={{
-                  padding: 10,
-                  paddingLeft: 15,
-                  borderTopWidth: 1,
-                  borderTopColor: c.border,
-                }}
-              >
-                <Text>Roster</Text>
-              </Pressable>
-
-              <Pressable
-                style={{
-                  padding: 10,
-                  paddingLeft: 15,
-                  borderTopWidth: 1,
-                  borderTopColor: c.border,
-                }}
-              >
-                <Text>View Analytics</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
+            />
+          ) : null}
+        </Pressable>
       </View>
-
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      {/* <View
-        style={{
-          gap: space.md,
-          paddingBottom: space.lg,
-        }}
-      >
-        <Segmented<View$>
-          segments={[
-            { key: "list", label: "List" },
-            { key: "roster", label: "Roster" },
-            { key: "requests", label: "Requests", count: pendingRegs },
-          ]}
-          value={view}
-          onChange={(next) => {
-            setView(next);
-            setVisited((v) => (v.has(next) ? v : new Set(v).add(next)));
-          }}
-        />
-      </View> */}
 
       <View className="flex-1">
         <TabPane active={view === "list"}>
@@ -1165,258 +1411,295 @@ export default function AttendanceScreen() {
           </ScrollView>
         </TabPane>
 
-        {/* ── Roster (calendar) ──────────────────────────────────────────── */}
+        {/* ── Roster ─────────────────────────────────────────────── */}
         {visited.has("roster") ? (
           <TabPane active={view === "roster"}>
             <ScrollView
-              contentContainerStyle={{ paddingBottom: bottomPad }}
+              contentContainerStyle={{
+                paddingBottom: bottomPad + 24,
+              }}
               showsVerticalScrollIndicator={false}
               refreshControl={refresher}
             >
               <View style={{ paddingHorizontal: space.screen }}>
-                <View className="flex-row items-center justify-between pb-4">
+                {/* ── Month Header ─────────────────────────────────── */}
+                <View
+                  style={{
+                    marginTop: space.md,
+                    backgroundColor: c.card,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 4,
+                    paddingVertical: 10,
+                    paddingHorizontal: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
                   <Pressable
                     onPress={() => stepMonth(-1)}
                     disabled={gridMonth === 0}
                     hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Previous month"
                     style={({ pressed }) => ({
-                      opacity: gridMonth === 0 ? 0.3 : pressed ? 0.6 : 1,
+                      width: 42,
+                      height: 42,
+                      borderRadius: 21,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: c.fill,
+                      opacity: gridMonth === 0 ? 0.35 : pressed ? 0.6 : 1,
                     })}
-                    className="h-9 w-9 items-center justify-center"
                   >
-                    <ChevronLeft size={20} strokeWidth={2.2} color={c.text} />
+                    <ChevronLeft size={21} strokeWidth={2.4} color={c.text} />
                   </Pressable>
 
-                  <Text style={{ color: c.text }} className={T.cardTitle}>
-                    {MONTHS_LONG[gridMonth]} {year}
-                  </Text>
+                  <View style={{ alignItems: "center" }}>
+                    <View className="flex-row items-center gap-2">
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 4,
+                          backgroundColor: brand[50],
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <CalendarDays
+                          size={18}
+                          strokeWidth={2}
+                          color={brand[600]}
+                        />
+                      </View>
+
+                      <Text
+                        style={{
+                          color: c.text,
+                          fontSize: 17,
+                          fontWeight: "700",
+                          letterSpacing: -0.3,
+                        }}
+                      >
+                        {MONTHS_LONG[gridMonth]} {year}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={{
+                        color: c.textFaint,
+                        fontSize: 11,
+                        marginTop: 2,
+                      }}
+                    >
+                      Your attendance calendar
+                    </Text>
+                  </View>
 
                   <Pressable
                     onPress={() => stepMonth(1)}
                     disabled={gridMonth === 11}
                     hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Next month"
                     style={({ pressed }) => ({
-                      opacity: gridMonth === 11 ? 0.3 : pressed ? 0.6 : 1,
+                      width: 42,
+                      height: 42,
+                      borderRadius: 21,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: c.fill,
+                      opacity: gridMonth === 11 ? 0.35 : pressed ? 0.6 : 1,
                     })}
-                    className="h-9 w-9 items-center justify-center"
                   >
-                    <ChevronRight size={20} strokeWidth={2.2} color={c.text} />
+                    <ChevronRight size={21} strokeWidth={2.4} color={c.text} />
                   </Pressable>
                 </View>
 
-                <View className="flex-row pb-3">
-                  {WEEKDAYS_LONG.map((d) => (
-                    <Text
-                      key={d}
-                      style={{ color: c.textFaint }}
-                      className={`flex-1 text-center uppercase ${T.nano}`}
-                    >
-                      {d.slice(0, 3)}
-                    </Text>
-                  ))}
-                </View>
-
-                <View className="flex-row flex-wrap">
-                  {cells.map((day, i) => {
-                    if (day === null) {
-                      return (
-                        <View
-                          key={`blank-${i}`}
-                          style={{ width: "14.28%", height: 46 }}
-                        />
-                      );
-                    }
-                    const key = ymd(new Date(year, gridMonth, day));
-                    const record = byDate.get(key);
-                    const kind = kindOf(record);
-                    const isSelected = key === selectedDay;
-                    const isToday = key === ymd(today);
-
-                    return (
-                      <Pressable
-                        key={day}
-                        onPress={() => setSelectedDay(key)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${day} ${MONTHS[gridMonth]}`}
-                        accessibilityState={{ selected: isSelected }}
-                        style={({ pressed }) => ({
-                          width: "14.28%",
-                          height: 46,
-                          opacity: pressed ? 0.6 : 1,
-                        })}
-                        className="items-center justify-center"
-                      >
-                        {/* The ring marks today / the selection; the DOT below
-                            carries the day's status, so the two never compete
-                            for the same colour. */}
-                        <View
-                          style={{
-                            borderWidth: isSelected || isToday ? 1.5 : 0,
-                            borderColor: isSelected ? brand[600] : c.border,
-                          }}
-                          className="h-9 w-9 items-center justify-center rounded-full"
-                        >
-                          <Text
-                            style={{ color: record ? c.text : c.textFaint }}
-                            className={T.body}
-                          >
-                            {day}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor:
-                              kind === "none"
-                                ? "transparent"
-                                : KIND_TONE[kind].tint,
-                          }}
-                          className="mt-1 h-1.5 w-1.5 rounded-full"
-                        />
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* A colour-coded grid is only readable with a key. */}
-                <View
-                  className="flex-row flex-wrap justify-center"
-                  style={{ gap: space.md, marginTop: space.lg }}
-                >
-                  {LEGEND.map(([label, tone]) => (
-                    <View key={label} className="flex-row items-center gap-1.5">
-                      <View
-                        style={{ backgroundColor: tone.tint }}
-                        className="h-1.5 w-1.5 rounded-full"
-                      />
-                      <Text style={{ color: c.textMuted }} className={T.micro}>
-                        {label}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              {/* ── Selected day ─────────────────────────────────────────── */}
-              <View
-                style={{ marginTop: space.xl, paddingHorizontal: space.screen }}
-              >
-                {/* Flat: a hairline and the standard radius, no lift. It is the
-                    only card on this tab, with nothing beside it to be raised
-                    above — a shadow here just fuzzes its edge. */}
+                {/* ── Calendar ─────────────────────────────────────── */}
                 <View
                   style={{
+                    marginTop: space.md,
                     backgroundColor: c.card,
-                    borderRadius: radius.card,
+                    borderRadius: 4,
                     borderWidth: 1,
                     borderColor: c.border,
-                    padding: space.lg,
-                    ...shadow.none,
+                    padding: space.md,
                   }}
                 >
-                  <View className="flex-row items-center justify-between">
-                    <Text style={{ color: c.text }} className={T.cardTitleSm}>
-                      {selectedDate
-                        ? `${WEEKDAYS_LONG[selectedDate.getDay()].slice(0, 3)}, ${selectedDate.getDate()} ${
-                            MONTHS_LONG[selectedDate.getMonth()]
-                          }`
-                        : "Select a day"}
-                    </Text>
-                    {selectedStatus ? (
-                      <Badge
-                        label={selectedStatus.label}
-                        tone={selectedStatus.tone}
-                      />
-                    ) : null}
+                  {/* Weekdays */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      borderRadius: 14,
+                      paddingVertical: 10,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {WEEKDAYS_LONG.map((d) => (
+                      <Text
+                        key={d}
+                        style={{
+                          flex: 1,
+                          textAlign: "center",
+                          color: c.textMuted,
+                          fontSize: 11,
+                          fontWeight: "700",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {d.slice(0, 3).toUpperCase()}
+                      </Text>
+                    ))}
                   </View>
 
-                  {selected ? (
-                    <>
-                      <View
-                        style={{ backgroundColor: c.border }}
-                        className="my-3 h-px"
-                      />
+                  {/* Days */}
+                  <View className="flex-row flex-wrap">
+                    {cells.map((day, i) => {
+                      if (day === null) {
+                        return (
+                          <View
+                            key={`blank-${i}`}
+                            style={{
+                              width: "14.28%",
+                              height: 58,
+                            }}
+                          />
+                        );
+                      }
 
-                      {/* Same anatomy as the List card — one day should not
-                          read two different ways depending on which tab found
-                          it. */}
-                      <View className="flex-row items-center gap-3">
-                        <PunchCol
-                          icon={LogIn}
-                          label="Clock In"
-                          time={fmtTime(selected.clock_in?.at)}
-                          tone={surface.success}
-                        />
-                        <PunchCol
-                          icon={LogOut}
-                          label="Clock Out"
-                          time={fmtTime(selected.clock_out?.at)}
-                          tone={surface.danger}
-                        />
-                      </View>
+                      const key = ymd(new Date(year, gridMonth, day));
 
-                      <Where punch={selected.clock_in} label="In" />
-                      <Where punch={selected.clock_out} label="Out" />
+                      const record = byDate.get(key);
+                      const kind = kindOf(record);
 
-                      <View
-                        style={{
-                          backgroundColor: c.fill,
-                          borderRadius: radius.well - 4,
-                          paddingHorizontal: space.md,
-                          paddingVertical: space.sm + 2,
-                        }}
-                        className="mt-3 flex-row items-center gap-3"
-                      >
-                        <Total
-                          label="Break"
-                          value={fmtDuration(selected.total_break_minutes ?? 0)}
-                        />
-                        <View
-                          style={{ backgroundColor: c.border }}
-                          className="h-7 w-px"
-                        />
-                        <Total
-                          label="Worked"
-                          value={fmtDuration(selected.total_work_minutes)}
-                        />
-                      </View>
+                      const isSelected = key === selectedDay;
+                      const isToday = key === ymd(today);
 
-                      <View className="mt-3 flex-row items-center gap-1.5">
-                        <Smartphone
-                          size={12}
-                          strokeWidth={2}
-                          color={c.textFaint}
-                        />
-                        <Text
-                          style={{ color: c.textFaint }}
-                          className={T.micro}
+                      const statusColor =
+                        kind === "none" ? "transparent" : KIND_TONE[kind].tint;
+
+                      return (
+                        <Pressable
+                          key={day}
+                          onPress={() => setSelectedDay(key)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${day} ${MONTHS[gridMonth]}`}
+                          accessibilityState={{
+                            selected: isSelected,
+                          }}
+                          style={({ pressed }) => ({
+                            width: "14.28%",
+                            height: 58,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            opacity: pressed ? 0.65 : 1,
+                          })}
                         >
-                          {selected.clock_in?.application ||
-                            selected.clock_in?.device_info ||
-                            "Unknown device"}
+                          {/* Today outer glow */}
+                          <View
+                            style={{
+                              width: 46,
+                              height: 46,
+                              borderRadius: 23,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: isSelected
+                                ? `${brand[600]}12`
+                                : isToday
+                                  ? `${brand[600]}08`
+                                  : "transparent",
+                              borderWidth: isToday && !isSelected ? 1 : 0,
+                              borderColor: `${brand[600]}30`,
+                            }}
+                          >
+                            {/* Selected */}
+                            <View
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 19,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: isSelected
+                                  ? brand[600]
+                                  : "transparent",
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: isSelected
+                                    ? "#FFFFFF"
+                                    : record
+                                      ? c.text
+                                      : c.textFaint,
+                                  fontSize: 15,
+                                  fontWeight:
+                                    isSelected || isToday ? "700" : "500",
+                                }}
+                              >
+                                {day}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Status */}
+                          <View
+                            style={{
+                              position: "absolute",
+                              bottom: 4,
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: statusColor,
+                            }}
+                          />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* ── Legend ─────────────────────────────────────── */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      marginTop: 14,
+                    }}
+                  >
+                    {LEGEND.map(([label, tone]) => (
+                      <View
+                        key={label}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 5,
+                          paddingHorizontal: 8,
+                          paddingVertical: 7,
+                          borderRadius: 999,
+                          // backgroundColor: c.fill,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 4,
+                            backgroundColor: tone.tint,
+                          }}
+                        />
+
+                        <Text
+                          style={{
+                            color: c.textMuted,
+                            fontSize: 11,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {label}
                         </Text>
                       </View>
-                    </>
-                  ) : (
-                    <Text
-                      style={{ color: c.textMuted }}
-                      className={`mt-2 ${T.secondary}`}
-                    >
-                      No attendance recorded on this day.
-                    </Text>
-                  )}
-
-                  {selectedDay &&
-                  canRegularize(selectedDay, todayKey, selected) ? (
-                    <View className="mt-4">
-                      <RegularizeButton
-                        onPress={() => setRegularizeDate(selectedDay)}
-                      />
-                    </View>
-                  ) : null}
+                    ))}
+                  </View>
                 </View>
               </View>
             </ScrollView>
@@ -1443,6 +1726,10 @@ export default function AttendanceScreen() {
             >
               {regs.isLoading ? (
                 <>
+                  <Skeleton height={130} radius={radius.card - 4} />
+                  <Skeleton height={130} radius={radius.card - 4} />
+                  <Skeleton height={130} radius={radius.card - 4} />
+                  <Skeleton height={130} radius={radius.card - 4} />
                   <Skeleton height={130} radius={radius.card - 4} />
                   <Skeleton height={130} radius={radius.card - 4} />
                 </>
@@ -1473,7 +1760,15 @@ export default function AttendanceScreen() {
                 />
               ) : (
                 regItems.map((item, i) => (
-                  <RegularizationCard key={item._id} item={item} index={i} />
+                  <RegularizationCard
+                    expanded={expandedId === item._id}
+                    onToggle={() =>
+                      setExpandedId(expandedId === item._id ? null : item._id)
+                    }
+                    key={item._id}
+                    item={item}
+                    index={i}
+                  />
                 ))
               )}
             </ScrollView>
@@ -1496,6 +1791,79 @@ export default function AttendanceScreen() {
         date={regularizeDate}
         onClose={() => setRegularizeDate("")}
       />
+
+      {/* ── View menu ────────────────────────────────────────────────────────
+          A sheet, not a floating popover: the trigger sits under the status bar
+          on a phone, and an anchored menu there would open downward across the
+          content it is meant to switch. The sheet is also where every other
+          choice on this screen already lives. */}
+      <BottomSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        maxHeightRatio={0.5}
+      >
+        <View style={{ padding: space.screen, gap: space.sm }}>
+          <Text style={{ color: c.text }} className={T.section}>
+            View
+          </Text>
+
+          {VIEWS.map((v) => {
+            const active = v.key === view;
+            const Icon = v.icon;
+            const count = v.key === "requests" ? pendingRegs : 0;
+
+            return (
+              <Pressable
+                key={v.key}
+                onPress={() => {
+                  setView(v.key);
+                  setVisited((s) => (s.has(v.key) ? s : new Set(s).add(v.key)));
+                  setMenuOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={count ? `${v.label}, ${count}` : v.label}
+                style={({ pressed }) => ({
+                  backgroundColor: active ? tint.bg : c.fill,
+                  borderRadius: radius.well,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                className="flex-row items-center gap-3 px-4 py-3"
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={2.2}
+                  color={active ? brand[700] : c.textMuted}
+                />
+
+                <View className="flex-1">
+                  <Text
+                    style={{ color: active ? brand[700] : c.text }}
+                    className={T.cardTitleSm}
+                    numberOfLines={1}
+                  >
+                    {v.label}
+                  </Text>
+                  <Text
+                    style={{ color: c.textMuted }}
+                    className={T.caption}
+                    numberOfLines={1}
+                  >
+                    {v.hint}
+                  </Text>
+                </View>
+
+                {count ? (
+                  <Badge label={String(count)} tone={surface.danger} />
+                ) : null}
+                {active ? (
+                  <Check size={18} strokeWidth={2.6} color={brand[700]} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
 
       {/* ── Month picker ─────────────────────────────────────────────────── */}
       <BottomSheet
