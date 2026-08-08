@@ -11,6 +11,7 @@ import ChatsScreen from "../screens/ChatsScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 import DocumentsScreen from "../screens/DocumentsScreen";
 import LeaveApplyScreen from "../screens/LeaveApplyScreen";
+import LeaveRequestsScreen from "../screens/LeaveRequestsScreen";
 import LeaveScreen from "../screens/LeaveScreen";
 import LoginScreen from "../screens/LoginScreen";
 import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
@@ -45,6 +46,8 @@ export type RootStackParamList = {
   Attendance: undefined;
   Leave: undefined;
   LeaveApply: undefined;
+  /** Everything the signed-in employee has applied for, and its status. */
+  LeaveRequests: undefined;
   Profile: undefined;
   /** Everyone in the signed-in employee's own department. */
   Team: undefined;
@@ -125,6 +128,10 @@ export default function RootNavigator() {
             <Stack.Screen name="Attendance" component={AttendanceScreen} />
             <Stack.Screen name="Leave" component={LeaveScreen} />
             <Stack.Screen name="LeaveApply" component={LeaveApplyScreen} />
+            <Stack.Screen
+              name="LeaveRequests"
+              component={LeaveRequestsScreen}
+            />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Team" component={TeamScreen} />
             <Stack.Screen name="Birthdays" component={BirthdayScreen} />

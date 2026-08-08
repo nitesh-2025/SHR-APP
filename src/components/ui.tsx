@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from "lucide-react-native";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -128,6 +128,9 @@ export function Button({
 }) {
   const { brand, c, dark } = useTheme();
   const off = disabled || loading;
+  // Press state as STATE, not as the `style` callback. See the note on the
+  // Pressable below — the callback form is what was eating the fill.
+  const [pressed, setPressed] = useState(false);
 
   const palette: Record<
     ButtonVariant,
@@ -155,16 +158,21 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: off, busy: loading }}
-      // NO `className` here, and none on the label either.
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      // NO `className` here, and no CALLBACK `style` either.
       //
-      // A FUNCTION `style` prop plus a `className` on the same Pressable is the
-      // one combination NativeWind cannot merge reliably — it injects its own
-      // style and the function's object loses, taking `backgroundColor` with
-      // it. That is how a primary button ended up transparent: white on a white
-      // sheet, present and pressable but invisible, which read as "there is no
-      // submit button". Layout, fill and type all live in plain styles now, so
-      // there is nothing left to merge.
-      style={({ pressed }) => [
+      // The className was removed first and the button was STILL invisible on
+      // the leave form — a white-on-white slab where the submit should be. The
+      // callback form is the only thing left that NativeWind's JSX transform
+      // rewrites on the way through, and it is the one form whose return value
+      // it can drop: lose that object and the fill, the height and the padding
+      // all go with it, leaving white label on white footer.
+      //
+      // A plain array of plain objects is what every other surface in this file
+      // uses and none of them have gone missing, so the press dip moved to
+      // state via onPressIn/onPressOut. Same feedback, nothing left to rewrite.
+      style={[
         {
           height: 52,
           borderRadius: radius.button,

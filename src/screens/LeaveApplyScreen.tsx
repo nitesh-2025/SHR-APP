@@ -1,12 +1,17 @@
-import { useNavigation } from '@react-navigation/native';
+import { StackActions, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   AlertCircle,
   CalendarRange,
   Check,
+  Clock3,
+  EllipsisVertical,
   HeartPulse,
+  ListChecks,
+  PenLine,
   Send,
   Sparkles,
+  Sun,
   TreePalm,
   Wallet,
   type LucideIcon,
@@ -26,14 +31,16 @@ import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { BottomSheet } from '../components/BottomSheet';
 import { DateField } from '../components/DateField';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Skeleton } from '../components/ui';
+import { Badge, Button, Skeleton } from '../components/ui';
 import { describeApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import {
   useApplyLeaveMutation,
   useGetMyBalanceQuery,
+  useGetMyLeavesQuery,
   LEAVE_TYPES,
   type LeaveType,
 } from '../store/leaveApi';
@@ -80,6 +87,58 @@ const TYPES: {
     blurb: 'Beyond your balance — deducted from salary',
     icon: Wallet,
   },
+];
+
+/**
+ * Applying, and reading back what you applied for.
+ *
+ * These were a segmented strip across the top of the form: "Request |
+ * Requested" — two words a pixel apart, differing by two letters, one of which
+ * was always the page you were already on. Behind the overflow each one gets
+ * the sentence that makes it obvious, and costs no vertical band when closed.
+ *
+ * "My requests" is a real pushed screen, not a hidden pane: "did my leave go
+ * through" is asked on a different day, and an answer you can only reach by
+ * first opening a blank application form is an answer nobody finds.
+ */
+const VIEWS: {
+  key: 'apply' | 'requests';
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: 'apply',
+    label: 'Apply for leave',
+    hint: 'Fill in a new request',
+    icon: PenLine,
+  },
+  {
+    key: 'requests',
+    label: 'My requests',
+    hint: 'What you sent, and where it got to',
+    icon: ListChecks,
+  },
+];
+
+/**
+ * Full day or half day, as menu rows behind the overflow.
+ *
+ * This was a two-up segmented strip in the form body, each half carrying a
+ * label AND a hint. On a 360 dp screen the hints ("One or more whole days" /
+ * "Counts as 0.5") were wider than their halves, overflowed the track and ran
+ * into each other — the strip read as one broken line of text. A menu row has
+ * the width for the hint, and the choice is a once-per-application one that
+ * does not deserve a permanent 60px band on the form.
+ */
+const DURATIONS: {
+  key: boolean;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+}[] = [
+  { key: false, label: 'Full day', hint: 'One or more whole days', icon: Sun },
+  { key: true, label: 'Half day', hint: 'A single date, counts as 0.5', icon: Clock3 },
 ];
 
 /** Openers, not answers — a tap fills the box and the cursor carries on. */
@@ -292,6 +351,91 @@ function RangeBreakdown({
   );
 }
 
+/* ── Overflow menu ────────────────────────────────────────────────────────── */
+
+/** Small caps label. Two groups in one sheet need saying apart. */
+function MenuHeading({ label }: { label: string }) {
+  const { c } = useTheme();
+  return (
+    <Text
+      style={{ color: c.textFaint, letterSpacing: 0.7, marginTop: space.xs }}
+      className={T.badge}
+    >
+      {label.toUpperCase()}
+    </Text>
+  );
+}
+
+/**
+ * One choice in the overflow sheet.
+ *
+ * Icon, label, and a line explaining what picking it does — the explanation is
+ * the whole reason these moved out of a segmented strip, where "Request" and
+ * "Requested" sat a pixel apart and differed by two letters.
+ */
+function MenuRow({
+  icon: Icon,
+  label,
+  hint,
+  active,
+  badge = 0,
+  radio = false,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  active: boolean;
+  badge?: number;
+  /** `radio` for a setting, plain button for a page you are navigating to. */
+  radio?: boolean;
+  onPress: () => void;
+}) {
+  const { c, brand, tint } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={radio ? 'radio' : 'button'}
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={badge ? `${label}, ${badge} pending. ${hint}` : `${label}. ${hint}`}
+      style={{
+        backgroundColor: active ? tint.bg : c.fill,
+        borderRadius: radius.well,
+        borderWidth: 1,
+        borderColor: active ? brand[600] : 'transparent',
+      }}
+      className="flex-row items-center gap-3 px-4 py-3"
+    >
+      <View
+        style={{
+          backgroundColor: active ? brand[600] : c.card,
+          borderRadius: radius.well - 4,
+        }}
+        className="h-10 w-10 items-center justify-center"
+      >
+        <Icon size={19} strokeWidth={2.1} color={active ? '#FFFFFF' : c.textMuted} />
+      </View>
+
+      <View className="flex-1">
+        <Text
+          style={{ color: active ? brand[700] : c.text }}
+          className={T.cardTitleSm}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text style={{ color: c.textMuted }} className={`mt-0.5 ${T.micro}`}>
+          {hint}
+        </Text>
+      </View>
+
+      {badge ? <Badge label={String(badge)} tone={surface.warning} /> : null}
+      {active ? <Check size={18} strokeWidth={2.6} color={brand[700]} /> : null}
+    </Pressable>
+  );
+}
+
 /**
  * Leave application. A pushed screen, not a sheet — it carries a date picker
  * and a multi-line field, both of which want the whole viewport, and a picker
@@ -310,9 +454,24 @@ export default function LeaveApplyScreen() {
   const [halfDay, setHalfDay] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const balance = useGetMyBalanceQuery();
   const [applyLeave, { isLoading }] = useApplyLeaveMutation();
+
+  /**
+   * How many of my requests are still unanswered.
+   *
+   * Only the count is used here — the list itself is its own screen. This is
+   * the same cached query that screen runs, so asking for it costs one request
+   * between the two, and the apply mutation invalidates it either way.
+   */
+  const mine = useGetMyLeavesQuery({ limit: 50 });
+
+  const pendingCount = useMemo(
+    () => (mine.data?.items ?? []).filter((l) => l.status === 'pending').length,
+    [mine.data],
+  );
 
   // A half day is a single date by definition, so the range collapses and there
   // is nothing for the server to work out.
@@ -376,7 +535,14 @@ export default function LeaveApplyScreen() {
         reason: reason.trim(),
       }).unwrap();
       toast.success('Leave applied', 'Your request is pending approval.');
-      navigation.goBack();
+      // REPLACE the form with the list rather than stacking it on top: the
+      // question straight after submitting is "did it actually go", and backing
+      // out of the answer should land on wherever you came from, not on a form
+      // you have already filed.
+      setReason('');
+      navigation.dispatch(
+        StackActions.replace('LeaveRequests' as never),
+      );
     } catch (e) {
       setError(describeApiError(e).title);
     }
@@ -387,16 +553,57 @@ export default function LeaveApplyScreen() {
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
-      <ScreenHeader title="Apply for Leave" onBack={() => navigation.goBack()} />
+      {/* With the duration behind the overflow, the subtitle is the only thing
+          left saying what the form is set to. It restates the menu's answer so
+          the menu does not have to be opened to remember it — "half day"
+          applied silently is the one setting worth a permanent line. */}
+      <ScreenHeader
+        title="Apply for Leave"
+        subtitle={halfDay ? 'Half day' : 'Full day'}
+        onBack={() => navigation.goBack()}
+        right={
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={pendingCount ? `Menu. ${pendingCount} pending` : 'Menu'}
+            style={{ marginRight: -4, paddingLeft: 4 }}
+          >
+            <EllipsisVertical size={22} strokeWidth={2.2} color={c.text} />
+            {/* A request nobody has answered yet is the one thing worth seeing
+                without opening the menu. */}
+            {pendingCount ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: 0,
+                  width: 9,
+                  height: 9,
+                  borderRadius: 999,
+                  backgroundColor: surface.warning.tint,
+                  borderWidth: 1.5,
+                  borderColor: c.bg,
+                }}
+              />
+            ) : null}
+          </Pressable>
+        }
+      />
 
       <KeyboardAvoidingView
-        className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: space.screen,
-            paddingBottom: insets.bottom + 130,
+            // Just breathing room under the last line. NOT clearance for the
+            // submit bar: that bar is a flex SIBLING of this ScrollView, so it
+            // already owns its own height and its own safe-area inset. The old
+            // `insets.bottom + 130` was reserving that space a second time —
+            // half a screen of nothing between the footnote and the button.
+            paddingBottom: space.xxl,
             gap: space.xxl,
           }}
           keyboardShouldPersistTaps="handled"
@@ -593,62 +800,6 @@ export default function LeaveApplyScreen() {
             </View>
           </Field>
 
-          {/* ── Duration ────────────────────────────────────────────────────
-              A two-way switch instead of the old "Half day" checkbox: the
-              choice is between two named things, and a lone checkbox made
-              "full day" the unlabelled absence of the other one. */}
-          <Field label="Duration">
-            <View
-              style={{ backgroundColor: c.fill, borderRadius: radius.input, padding: 4 }}
-              className="flex-row"
-              accessibilityRole="radiogroup"
-            >
-              {[
-                { key: false, label: 'Full day', hint: 'One or more whole days' },
-                { key: true, label: 'Half day', hint: 'Counts as 0.5' },
-              ].map((opt) => {
-                const active = halfDay === opt.key;
-                return (
-                  <Pressable
-                    key={String(opt.key)}
-                    onPress={() => setHalfDay(opt.key)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`${opt.label}. ${opt.hint}`}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      borderRadius: radius.input - 4,
-                      // A white chip on a dark track is a hole punched in the
-                      // surface; dark mode fills the thumb with the accent.
-                      backgroundColor: active ? (dark ? brand[600] : c.card) : 'transparent',
-                      opacity: pressed ? 0.8 : 1,
-                      paddingVertical: space.md,
-                      ...(active && !dark ? shadow.soft : shadow.none),
-                    })}
-                    className="items-center"
-                  >
-                    <Text
-                      style={{
-                        color: active ? (dark ? '#FFFFFF' : c.text) : c.textMuted,
-                      }}
-                      className={T.cardTitleSm}
-                    >
-                      {opt.label}
-                    </Text>
-                    <Text
-                      style={{
-                        color: active && dark ? 'rgba(255,255,255,0.8)' : c.textFaint,
-                      }}
-                      className={`mt-0.5 ${T.nano}`}
-                    >
-                      {opt.hint}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Field>
-
           {/* ── Dates ──────────────────────────────────────────────────────── */}
           <Field
             label={halfDay ? 'Date' : 'Dates'}
@@ -764,6 +915,60 @@ export default function LeaveApplyScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── Menu ───────────────────────────────────────────────────────────
+          Everything this screen can be switched to, in one place: which page
+          you are on, and — while you are on the form — how long the leave is.
+          A sheet rather than an anchored popover, because the trigger sits
+          right under the status bar and a menu opening downward from there
+          would cover the very thing it changes. */}
+      <BottomSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        maxHeightRatio={0.7}
+      >
+        <View style={{ padding: space.screen, gap: space.sm }}>
+          <MenuHeading label="Show" />
+
+          {VIEWS.map((v) => (
+            <MenuRow
+              key={v.key}
+              icon={v.icon}
+              label={v.label}
+              hint={v.hint}
+              active={v.key === 'apply'}
+              badge={v.key === 'requests' ? pendingCount : 0}
+              onPress={() => {
+                setMenuOpen(false);
+                if (v.key === 'requests') {
+                  navigation.navigate('LeaveRequests' as never);
+                }
+              }}
+            />
+          ))}
+
+          <View
+            style={{ backgroundColor: c.border, marginVertical: space.sm }}
+            className="h-px"
+          />
+          <MenuHeading label="How long" />
+
+          {DURATIONS.map((opt) => (
+            <MenuRow
+              key={String(opt.key)}
+              icon={opt.icon}
+              label={opt.label}
+              hint={opt.hint}
+              active={halfDay === opt.key}
+              radio
+              onPress={() => {
+                setHalfDay(opt.key);
+                setMenuOpen(false);
+              }}
+            />
+          ))}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
