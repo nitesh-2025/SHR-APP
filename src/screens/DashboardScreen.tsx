@@ -7,6 +7,10 @@ import { AppDrawer } from "../components/AppDrawer";
 import { AttendanceCard } from "../components/AttendanceCard";
 import { fullNameOf } from "../components/Avatar";
 import { BirthdayBanner } from "../components/BirthdayBanner";
+import {
+  BirthdayBackdrop,
+  BirthdayGreeting,
+} from "../components/BirthdayGreeting";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { LeaveBalanceCard } from "../components/LeaveBalanceCard";
 import { NotificationButton } from "../components/NotificationButton";
@@ -15,6 +19,7 @@ import { ProfileButton } from "../components/ProfileButton";
 import { QuickActions } from "../components/QuickActions";
 import { WeekSummary } from "../components/WeekSummary";
 import { SectionHeader } from "../components/ui";
+import { useTodaysBirthdays } from "../hooks/useTodaysBirthdays";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useMenuNav } from "../navigation/useMenuNav";
 import { selectCurrentUser, useAppSelector } from "../store";
@@ -80,8 +85,28 @@ export default function DashboardScreen() {
   // phone, and the greeting is meant to read as one glance.
   const firstName = user?.first_name?.trim() || fullNameOf(user).split(" ")[0];
 
+  /** Set only on the user's own birthday; `undefined` the rest of the year. */
+  const { mine: birthday } = useTodaysBirthdays();
+
+  // Declared once and handed to whichever greeting renders — two copies of the
+  // same pair is two places to forget when one of them changes.
+  const headerActions = (
+    <View className="flex-row items-center gap-2.5">
+      <NotificationButton onPress={() => setNotificationsOpen(true)} />
+      <ProfileButton
+        user={user}
+        onDuty={today.data?.state === "clocked_in"}
+        celebrating={Boolean(birthday)}
+        onPress={() => navigation.navigate("Profile")}
+      />
+    </View>
+  );
+
   return (
-    <View style={{ backgroundColor: c.bg }} className="flex-1">
+    // The wash runs the whole page on a birthday, not just the header — the
+    // colour stopping at the greeting's bottom edge read as a banner pasted
+    // onto an ordinary screen rather than as the screen itself celebrating.
+    <BirthdayBackdrop active={Boolean(birthday)}>
       <ScrollView
         contentContainerStyle={{
           paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 16,
@@ -95,62 +120,49 @@ export default function DashboardScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Greeting ─────────────────────────────────────────────────── */}
-        {/* The greeting owns the whole left side. There is no menu button here
-            on purpose — the drawer already has a home in the bottom bar's
-            "More" tab, and a hamburger competing with the name made the top of
-            the screen read as chrome instead of as a welcome. */}
-        <View
-          style={{
-            paddingTop: insets.top + space.md,
-            paddingHorizontal: space.screen,
-            paddingBottom: space.xl,
-          }}
-          className="flex-row items-start justify-between"
-        >
-          <View className="flex-1 pr-3">
-            <Text style={{ color: c.textMuted }} className={T.body}>
-              {hello}
-            </Text>
-            <Text
-              style={{ color: c.text }}
-              className={`mt-0.5 ${T.screenTitle}`}
-              numberOfLines={1}
-            >
-              {firstName} 👋
-            </Text>
-          </View>
-
-          {/* Nudged down so the pair sits level with the name, not the lead-in. */}
+        {/* ── Greeting ─────────────────────────────────────────────────────
+            On a birthday the whole band changes: the time-of-day lead-in is a
+            polite nothing, and it is not what someone opening the app on their
+            own birthday should be told first. Every other day it renders
+            exactly as before. */}
+        {birthday ? (
+          <BirthdayGreeting
+            name={firstName}
+            dob={birthday.date_of_birth}
+            paddingTop={insets.top + space.md}
+            right={headerActions}
+          />
+        ) : (
           <View
-            style={{ marginTop: space.sm }}
-            className="flex-row items-center gap-2.5"
+            style={{
+              paddingTop: insets.top + space.md,
+              paddingHorizontal: space.screen,
+              paddingBottom: space.xl,
+            }}
+            className="flex-row items-start justify-between"
           >
-            <NotificationButton onPress={() => setNotificationsOpen(true)} />
-            <ProfileButton
-              user={user}
-              onDuty={today.data?.state === "clocked_in"}
-              onPress={() => navigation.navigate("Profile")}
-            />
-          </View>
-        </View>
+            <View className="flex-1 pr-3">
+              <Text style={{ color: c.textMuted }} className={T.body}>
+                {hello}
+              </Text>
+              <Text
+                style={{ color: c.text }}
+                className={`mt-0.5 ${T.screenTitle}`}
+                numberOfLines={1}
+              >
+                {firstName} 👋
+              </Text>
+            </View>
 
-        {/* ── Your birthday ────────────────────────────────────────────────
-            Above the punch card, and only on the one day a year it applies:
-            being wished is the first thing you should see, not something to
-            scroll to past your own timesheet. */}
-        <BirthdayBanner
-          scope="mine"
-          onPress={() => navigation.navigate("Birthdays")}
-        />
+            {/* Nudged down so the pair sits level with the name, not the
+                lead-in. */}
+            <View style={{ marginTop: space.sm }}>{headerActions}</View>
+          </View>
+        )}
 
         {/* ── Today's attendance (the punch lives here) ─────────────────── */}
         <AttendanceCard />
 
-        {/* ── Someone else's birthday ──────────────────────────────────────
-            Below the punch card — wishing a teammate is a nudge, not the
-            reason anyone opened the app. Renders nothing on a day with no
-            birthdays. */}
         <BirthdayBanner
           scope="others"
           onPress={() => navigation.navigate("Birthdays")}
@@ -158,7 +170,10 @@ export default function DashboardScreen() {
 
         {/* ── Shortcuts ────────────────────────────────────────────────── */}
         <View style={{ marginTop: space.xxl }}>
-          <SectionHeader title="Quick Actions" onPress={() => setMenuOpen(true)} />
+          <SectionHeader
+            title="Quick Actions"
+            onPress={() => setMenuOpen(true)}
+          />
           <QuickActions onOpen={open} onMore={() => setMenuOpen(true)} />
         </View>
 
@@ -192,6 +207,6 @@ export default function DashboardScreen() {
         onClose={() => setMenuOpen(false)}
         onNavigate={open}
       />
-    </View>
+    </BirthdayBackdrop>
   );
 }

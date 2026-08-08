@@ -1,11 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Cake, ChevronRight, PartyPopper } from 'lucide-react-native';
-import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Avatar, personUser } from './Avatar';
+import { useTodaysBirthdays } from '../hooks/useTodaysBirthdays';
 import { selectCurrentUser, useAppSelector } from '../store';
-import { useGetUpcomingBirthdaysQuery } from '../store/employeesApi';
 import { radius, shadow, space, surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
@@ -37,24 +36,7 @@ export function BirthdayBanner({
 }) {
   const { c, brand, dark } = useTheme();
   const me = useAppSelector(selectCurrentUser);
-
-  // A day's window is all this needs. The full month lives on the Birthdays
-  // screen; here the question is only "is anyone celebrating right now".
-  const { data } = useGetUpcomingBirthdaysQuery({ days: 1 });
-
-  const today = useMemo(() => (data ?? []).filter((b) => b.is_today), [data]);
-
-  // Matched on the employee CODE: the session user's `_id` is a USER id while
-  // this list carries EMPLOYEE ids.
-  const isMine = useMemo(
-    () => Boolean(me?.employee_id && today.some((b) => b.employee_id === me.employee_id)),
-    [today, me],
-  );
-
-  const others = useMemo(
-    () => today.filter((b) => b.employee_id !== me?.employee_id),
-    [today, me],
-  );
+  const { isMine, others } = useTodaysBirthdays();
 
   /* ── Your own day ───────────────────────────────────────────────────── */
 
