@@ -9,7 +9,7 @@ import {
   Send,
   UsersRound,
 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -115,14 +115,13 @@ function MyBirthdayHero({ name }: { name: string }) {
 
   return (
     <LinearGradient
-      colors={[brand[500], brand[700]]}
+      colors={[brand[800], brand[900]]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
         marginHorizontal: space.screen,
-        borderRadius: radius.card,
+        borderRadius: 4,
         padding: space.xl,
-        ...shadow.card,
       }}
     >
       <View className="flex-row items-center gap-3">
@@ -169,42 +168,221 @@ function TodayCard({
 }) {
   const { c, dark, brand } = useTheme();
 
-  // The amber wash is what separates a card for TODAY from the plain rows of
-  // upcoming birthdays below it. Falling back to the ordinary card colour in
-  // dark mode erased that difference, so the tone is re-mixed for the scheme.
   const cake = toneFor(surface.warning, dark);
+
+  // Floating animation
+  const float1 = useSharedValue(0);
+  const float2 = useSharedValue(0);
+  const float3 = useSharedValue(0);
+
+  useEffect(() => {
+    const animate = (
+      value: { value: number },
+      duration: number,
+      distance: number,
+    ) => {
+      value.value = withRepeat(
+        withTiming(-distance, {
+          duration,
+          easing: Easing.inOut(Easing.quad),
+        }),
+        -1,
+        true,
+      );
+    };
+
+    animate(float1, 1500, 7);
+    animate(float2, 1800, 10);
+    animate(float3, 1300, 6);
+  }, [float1, float2, float3]);
 
   return (
     <View
       style={{
+        position: "relative",
+        overflow: "visible",
         backgroundColor: cake.bg,
-        borderRadius: radius.card - 4,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: cake.border,
         padding: space.lg,
         ...(dark ? shadow.none : shadow.soft),
       }}
     >
-      <View className="flex-row items-center gap-3">
-        <View>
-          <Avatar user={personUser(person)} size={52} />
+      {/* ================= BALLOONS ================= */}
+
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          right: 10,
+          bottom: -22,
+          width: 105,
+          height: 105,
+          overflow: "visible",
+        }}
+      >
+        {/* Back balloon */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            right: 4,
+            bottom: 30,
+            transform: [{ translateY: float2 }, { rotate: "12deg" }],
+          }}
+        >
           <View
             style={{
-              position: "absolute",
-              right: -2,
-              bottom: -2,
-              backgroundColor: cake.tint,
-              // The ring cuts the badge out of whatever it overlaps, so it has
-              // to follow the card fill rather than name a colour of its own.
-              borderWidth: 2,
-              borderColor: cake.bg,
+              width: 30,
+              height: 39,
+              borderRadius: 20,
+              backgroundColor: "#8B5CF6",
+              borderWidth: 1.5,
+              borderColor: "#7C3AED",
             }}
-            className="h-6 w-6 items-center justify-center rounded-full"
-          >
-            <Cake size={12} strokeWidth={2.6} color="#FFFFFF" />
-          </View>
-        </View>
+          />
 
+          {/* knot */}
+          <View
+            style={{
+              alignSelf: "center",
+              width: 0,
+              height: 0,
+              borderLeftWidth: 4,
+              borderRightWidth: 4,
+              borderTopWidth: 6,
+              borderLeftColor: "transparent",
+              borderRightColor: "transparent",
+              borderTopColor: "#7C3AED",
+            }}
+          />
+
+          {/* string */}
+          <View
+            style={{
+              width: 1,
+              height: 35,
+              backgroundColor: "#A78BFA",
+              alignSelf: "center",
+              transform: [{ rotate: "-8deg" }],
+            }}
+          />
+        </Animated.View>
+
+        {/* Main pink balloon */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            right: 32,
+            bottom: 34,
+            transform: [{ translateY: float1 }, { rotate: "-7deg" }],
+          }}
+        >
+          <View
+            style={{
+              width: 39,
+              height: 50,
+              borderRadius: 25,
+              backgroundColor: "#F43F5E",
+              borderWidth: 1.5,
+              borderColor: "#E11D48",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {/* Highlight */}
+            <View
+              style={{
+                position: "absolute",
+                top: 9,
+                left: 9,
+                width: 7,
+                height: 13,
+                borderRadius: 5,
+                backgroundColor: "rgba(255,255,255,0.35)",
+                transform: [{ rotate: "-20deg" }],
+              }}
+            />
+          </View>
+
+          {/* knot */}
+          <View
+            style={{
+              alignSelf: "center",
+              width: 0,
+              height: 0,
+              borderLeftWidth: 5,
+              borderRightWidth: 5,
+              borderTopWidth: 7,
+              borderLeftColor: "transparent",
+              borderRightColor: "transparent",
+              borderTopColor: "#E11D48",
+            }}
+          />
+
+          {/* string */}
+          <View
+            style={{
+              width: 1.2,
+              height: 38,
+              backgroundColor: "#FB7185",
+              alignSelf: "center",
+              transform: [{ rotate: "5deg" }],
+            }}
+          />
+        </Animated.View>
+
+        {/* Yellow balloon */}
+        <Animated.View
+          style={{
+            position: "absolute",
+            right: 62,
+            bottom: 29,
+            transform: [{ translateY: float3 }, { rotate: "-16deg" }],
+          }}
+        >
+          <View
+            style={{
+              width: 27,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#F59E0B",
+              borderWidth: 1.5,
+              borderColor: "#D97706",
+            }}
+          />
+
+          {/* knot */}
+          <View
+            style={{
+              alignSelf: "center",
+              width: 0,
+              height: 0,
+              borderLeftWidth: 4,
+              borderRightWidth: 4,
+              borderTopWidth: 6,
+              borderLeftColor: "transparent",
+              borderRightColor: "transparent",
+              borderTopColor: "#D97706",
+            }}
+          />
+
+          {/* string */}
+          <View
+            style={{
+              width: 1,
+              height: 30,
+              backgroundColor: "#FBBF24",
+              alignSelf: "center",
+              transform: [{ rotate: "-10deg" }],
+            }}
+          />
+        </Animated.View>
+      </View>
+
+      {/* ================= CONTENT ================= */}
+
+      <View className="flex-row items-center">
         <View className="flex-1">
           <Text
             style={{ color: c.text }}
@@ -213,6 +391,7 @@ function TodayCard({
           >
             {person.name || person.employee_id}
           </Text>
+
           <Text
             style={{ color: c.textMuted }}
             className={`mt-0.5 ${T.micro}`}
@@ -223,6 +402,8 @@ function TodayCard({
           </Text>
         </View>
       </View>
+
+      {/* ================= ACTION ================= */}
 
       <Pressable
         onPress={onWish}
@@ -237,6 +418,7 @@ function TodayCard({
         className="h-10 flex-row items-center justify-center gap-2"
       >
         <Send size={15} strokeWidth={2.4} color="#FFFFFF" />
+
         <Text className="font-ui-semibold text-[13.5px] text-white">
           Send wishes
         </Text>
@@ -254,12 +436,11 @@ function UpcomingRow({ person }: { person: UpcomingBirthday }) {
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
         borderWidth: 1,
         borderColor: c.border,
+        borderRadius: 4,
         paddingHorizontal: space.lg,
         paddingVertical: space.md,
-        ...(dark ? shadow.none : shadow.soft),
       }}
       className="flex-row items-center gap-3"
     >
