@@ -371,18 +371,24 @@ export function Skeleton({
   radius?: number;
   style?: ViewStyle;
 }) {
-  const { c } = useTheme();
-  const pulse = useSharedValue(0.5);
+  const { dark } = useTheme();
+
+  const pulse = useSharedValue(0.45);
 
   useEffect(() => {
     pulse.value = withRepeat(
-      withTiming(1, { duration: 850, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.9, {
+        duration: 900,
+        easing: Easing.inOut(Easing.ease),
+      }),
       -1,
       true,
     );
   }, [pulse]);
 
-  const animated = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  const animated = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+  }));
 
   return (
     <Animated.View
@@ -391,7 +397,7 @@ export function Skeleton({
           height,
           width: width ?? "100%",
           borderRadius: r,
-          backgroundColor: c.fill,
+          backgroundColor: dark ? "#30363D" : "#D5DAE1",
         },
         animated,
         style,

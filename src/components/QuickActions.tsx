@@ -136,9 +136,6 @@ const ACTIONS: Action[] = [
     icon: BookText,
     tone: surface.info,
   },
-  // Meetings stays last and stays flagged: there is no calendar/meeting
-  // endpoint on the backend at all, and a screen built on a guess is worse
-  // than a card that says why it does nothing.
   {
     key: "meeting",
     label: "Meetings",
@@ -177,9 +174,6 @@ function ActionCard({
       style={({ pressed }) => ({
         width,
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
-        // The hairline does the separating in both schemes; the shadow is only
-        // there to lift the card off the canvas, not to draw its edge.
         borderWidth: 1,
         borderColor: c.border,
         paddingHorizontal: space.sm,
@@ -196,7 +190,7 @@ function ActionCard({
       <View
         style={{
           backgroundColor: action.tone.tint,
-          borderRadius: radius.well,
+          borderRadius: 4,
         }}
         className="h-14 w-14 items-center justify-center"
       >
@@ -220,14 +214,9 @@ export function QuickActions({
   onMore,
 }: {
   onOpen?: (key: string) => void;
-  /** Kept for the caller that still routes a "more" tap here. */
   onMore?: () => void;
 }) {
   const { width } = useWindowDimensions();
-
-  // Sized so exactly PER_SCREEN cards fill the viewport — a hardcoded width
-  // left the last card sliced by the screen edge, which reads as broken rather
-  // than as "there is more".
   const cardWidth =
     (width - space.screen * 2 - GAP * (PER_SCREEN - 1)) / PER_SCREEN;
 

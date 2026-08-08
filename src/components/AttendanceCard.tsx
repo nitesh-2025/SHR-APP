@@ -1,25 +1,25 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useState } from "react";
+import { Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedProps,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+} from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
 
-import { Skeleton } from './ui';
-import { LONG_BREAK_MIN } from '../config/env';
-import { describeApiError } from '../lib/apiError';
+import { Skeleton } from "./ui";
+import { LONG_BREAK_MIN } from "../config/env";
+import { describeApiError } from "../lib/apiError";
 import {
   useGetMyTodayQuery,
   type AttendanceRecord,
-} from '../store/attendanceApi';
-import { radius, shadow, space } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { fmtDuration, fmtTime } from '../utils/date';
+} from "../store/attendanceApi";
+import { radius, shadow, space } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { fmtDuration, fmtTime } from "../utils/date";
 
 const DEFAULT_SHIFT_MINUTES = 8 * 60;
 
@@ -28,7 +28,7 @@ const DEFAULT_SHIFT_MINUTES = 8 * 60;
  * MEASURE rather than a fact, and against a deep green fill amber is the only
  * accent that stays legible without introducing a second "status" colour.
  */
-const GOAL_ARC = '#FBBF24';
+const GOAL_ARC = "#FBBF24";
 
 /** Reanimated can only animate a component's props, not an SVG element itself. */
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -41,7 +41,7 @@ function timeOf(iso?: string): number | null {
 
 /** `"09:30"` → 570. Anything else → null. */
 export function minutesOfDay(hhmm?: string): number | null {
-  const parts = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  const parts = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? "");
   return parts ? Number(parts[1]) * 60 + Number(parts[2]) : null;
 }
 
@@ -54,8 +54,8 @@ export function shiftLabel(record?: AttendanceRecord | null): string | null {
     const m = minutesOfDay(hhmm);
     if (m === null) return hhmm;
     const h = Math.floor(m / 60);
-    return `${String(((h + 11) % 12) + 1).padStart(2, '0')}:${String(m % 60).padStart(2, '0')} ${
-      h < 12 ? 'AM' : 'PM'
+    return `${String(((h + 11) % 12) + 1).padStart(2, "0")}:${String(m % 60).padStart(2, "0")} ${
+      h < 12 ? "AM" : "PM"
     }`;
   };
   return `${to12(s)} – ${to12(e)}`;
@@ -89,9 +89,10 @@ export function workedMinutes(
   // On break the clock freezes at the moment the break began, so the number
   // doesn't keep climbing while the user is away from work.
   const until =
-    record.state === 'on_break'
-      ? (timeOf(record.breaks?.[record.breaks.length - 1]?.break_out?.at) ?? now)
-      : record.state === 'clocked_out'
+    record.state === "on_break"
+      ? (timeOf(record.breaks?.[record.breaks.length - 1]?.break_out?.at) ??
+        now)
+      : record.state === "clocked_out"
         ? (timeOf(record.clock_out?.at) ?? now)
         : now;
 
@@ -109,8 +110,10 @@ export function currentBreakMinutes(
   record: AttendanceRecord | null | undefined,
   now: number,
 ): number {
-  if (record?.state !== 'on_break') return 0;
-  const started = timeOf(record.breaks?.[record.breaks.length - 1]?.break_out?.at);
+  if (record?.state !== "on_break") return 0;
+  const started = timeOf(
+    record.breaks?.[record.breaks.length - 1]?.break_out?.at,
+  );
   return started === null ? 0 : Math.max(0, (now - started) / 60000);
 }
 
@@ -145,7 +148,7 @@ function stopwatch(minutes: number): string {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
 /* ── Goal ring ────────────────────────────────────────────────────────────── */
@@ -157,7 +160,11 @@ function stopwatch(minutes: number): string {
  * Kept to 96: at 112 it claimed the entire right half of the card and squeezed
  * the stopwatch and the two punch columns into whatever was left.
  */
-function GoalRing({ progress, size = 96, stroke = 9 }: {
+function GoalRing({
+  progress,
+  size = 96,
+  stroke = 9,
+}: {
   progress: number;
   size?: number;
   stroke?: number;
@@ -165,7 +172,10 @@ function GoalRing({ progress, size = 96, stroke = 9 }: {
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const center = size / 2;
-  const target = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0));
+  const target = Math.min(
+    1,
+    Math.max(0, Number.isFinite(progress) ? progress : 0),
+  );
 
   const swept = useSharedValue(0);
   useEffect(() => {
@@ -180,8 +190,11 @@ function GoalRing({ progress, size = 96, stroke = 9 }: {
   }));
 
   return (
-    <View style={{ width: size, height: size }} className="items-center justify-center">
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+    <View
+      style={{ width: size, height: size }}
+      className="items-center justify-center"
+    >
+      <Svg width={size} height={size} style={{ position: "absolute" }}>
         <Circle
           cx={center}
           cy={center}
@@ -248,9 +261,9 @@ export function AttendanceCard() {
   const { data: record, isLoading, error } = useGetMyTodayQuery();
 
   const state = record?.state;
-  const onBreak = state === 'on_break';
+  const onBreak = state === "on_break";
   // Ticks on break too — the break timer is the whole point of that state.
-  const now = useTicker(state === 'clocked_in' || onBreak);
+  const now = useTicker(state === "clocked_in" || onBreak);
 
   const worked = workedMinutes(record, now);
   const progress = worked / shiftMinutes(record);
@@ -261,7 +274,7 @@ export function AttendanceCard() {
   /** Past the allowance. The number turns amber rather than raising an alert. */
   const breakOverrun = onBreak && breakNow > LONG_BREAK_MIN;
 
-  const breakValue = breakTotal > 0 ? fmtDuration(breakTotal) : '--:--';
+  const breakValue = breakTotal > 0 ? fmtDuration(breakTotal) : "--:--";
 
   /**
    * On a break the hero number becomes the BREAK stopwatch.
@@ -280,15 +293,15 @@ export function AttendanceCard() {
    */
   const statusLine = failed
     ? describeApiError(error).title
-    : state === 'clocked_in'
-      ? 'Hours Worked'
+    : state === "clocked_in"
+      ? "Hours Worked"
       : onBreak
         ? breakOverrun
           ? `On break · over ${fmtDuration(LONG_BREAK_MIN)}`
-          : 'On break · work paused'
-        : state === 'clocked_out'
-          ? 'Day complete'
-          : 'Not clocked in yet';
+          : "On break · work paused"
+        : state === "clocked_out"
+          ? "Day complete"
+          : "Not clocked in yet";
 
   if (isLoading) {
     return (
@@ -301,23 +314,15 @@ export function AttendanceCard() {
   return (
     <>
       <LinearGradient
-        // Deep, muted green — not the bright ramp mid-tone. A saturated green
-        // this large stops being a surface and starts being a signal.
-        colors={[brand[700], brand[900]]}
+        colors={[brand[900], brand[800]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
           marginHorizontal: space.screen,
-          borderRadius: radius.card,
+          borderRadius: 4,
           padding: space.lg + 2,
-          ...shadow.card,
         }}
       >
-        {/* ── Eyebrow + stopwatch + goal ─────────────────────────────────
-            The ring is lifted to the top-right and the glass status chip is
-            gone. The chip was only ever a word, and the line under the
-            stopwatch can carry that word for free — which buys the ring the
-            whole right column instead of a slot below the header. */}
         <View className="flex-row items-start">
           <View className="flex-1 pr-3">
             <Text
@@ -328,14 +333,16 @@ export function AttendanceCard() {
             </Text>
 
             <Text
-              style={{ color: breakOverrun ? GOAL_ARC : '#FFFFFF' }}
+              style={{ color: breakOverrun ? GOAL_ARC : "#FFFFFF" }}
               className={`mt-2.5 ${T.kpiHero}`}
               allowFontScaling={false}
             >
               {stopwatch(heroMinutes)}
             </Text>
             <Text
-              style={{ color: breakOverrun ? GOAL_ARC : 'rgba(255,255,255,0.75)' }}
+              style={{
+                color: breakOverrun ? GOAL_ARC : "rgba(255,255,255,0.75)",
+              }}
               className={T.body}
               numberOfLines={1}
             >
@@ -351,7 +358,10 @@ export function AttendanceCard() {
             the order the day actually happens in. Sharing the row with the ring
             left three columns fighting over ~220px and the times truncating. */}
         <View className="mt-5 flex-row items-center">
-          <Punch label="Check In" value={fmtTime(record?.clock_in?.at) ?? '--:--'} />
+          <Punch
+            label="Check In"
+            value={fmtTime(record?.clock_in?.at) ?? "--:--"}
+          />
           <View className="h-9 w-px bg-white/20" />
           {/* While the hero shows the running break, this column carries the
               worked total so neither number is ever off-screen. */}
@@ -361,9 +371,11 @@ export function AttendanceCard() {
             <Punch label="Break" value={breakValue} />
           )}
           <View className="h-9 w-px bg-white/20" />
-          <Punch label="Check Out" value={fmtTime(record?.clock_out?.at) ?? '--:--'} />
+          <Punch
+            label="Check Out"
+            value={fmtTime(record?.clock_out?.at) ?? "--:--"}
+          />
         </View>
-
       </LinearGradient>
     </>
   );

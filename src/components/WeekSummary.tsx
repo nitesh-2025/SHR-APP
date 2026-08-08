@@ -1,15 +1,18 @@
-import { useMemo } from 'react';
-import { Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useMemo } from "react";
+import { Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { Skeleton } from './ui';
-import { useGetMyHistoryQuery, type AttendanceRecord } from '../store/attendanceApi';
-import { radius, shadow, space } from '../theme/colors';
-import { useTheme } from '../theme/ThemeProvider';
-import { T } from '../theme/type';
-import { ymd } from '../utils/date';
+import { Skeleton } from "./ui";
+import {
+  useGetMyHistoryQuery,
+  type AttendanceRecord,
+} from "../store/attendanceApi";
+import { radius, shadow, space } from "../theme/colors";
+import { useTheme } from "../theme/ThemeProvider";
+import { T } from "../theme/type";
+import { ymd } from "../utils/date";
 
-const LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 /** Height of the plot area. Bars are drawn as a fraction of this. */
 const PLOT = 92;
@@ -132,7 +135,7 @@ export function WeekSummary() {
   );
 
   const present = cells.filter(
-    (d) => d.record?.status === 'present' || d.record?.status === 'in_progress',
+    (d) => d.record?.status === "present" || d.record?.status === "in_progress",
   ).length;
   const totalDays = cells.filter((d) => d.record).length;
 
@@ -154,31 +157,39 @@ export function WeekSummary() {
       <View
         style={{
           backgroundColor: c.card,
-          borderRadius: radius.card,
-          // No shadow. A full-width panel has nothing beside it to be lifted
-          // above — the hairline is the only edge it needs.
+          borderRadius: 6,
           borderWidth: 1,
           borderColor: c.border,
           padding: space.lg,
-          ...shadow.none,
         }}
         className="flex-row"
       >
         {/* ── Totals ───────────────────────────────────────────────────── */}
         <View
           style={{
-            backgroundColor: c.fill,
+            // backgroundColor: c.fill,
             borderRadius: radius.well,
             paddingHorizontal: space.md,
             paddingVertical: space.md,
+            borderRightWidth: 1,
+            borderRightColor: c.border,
+            alignItems: "center",
             width: 84,
           }}
           className="justify-center"
         >
-          <Text style={{ color: c.textMuted }} className={T.nano} numberOfLines={1}>
+          <Text
+            style={{ color: c.textMuted }}
+            className={T.nano}
+            numberOfLines={1}
+          >
             Total Days
           </Text>
-          <Text style={{ color: c.text }} className={T.kpiSm} allowFontScaling={false}>
+          <Text
+            style={{ color: c.text }}
+            className={T.kpiSm}
+            allowFontScaling={false}
+          >
             {totalDays}
           </Text>
 
@@ -189,7 +200,11 @@ export function WeekSummary() {
           >
             Present
           </Text>
-          <Text style={{ color: c.text }} className={T.kpiSm} allowFontScaling={false}>
+          <Text
+            style={{ color: c.text }}
+            className={T.kpiSm}
+            allowFontScaling={false}
+          >
             {present}
           </Text>
         </View>

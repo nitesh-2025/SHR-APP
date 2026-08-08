@@ -220,10 +220,7 @@ export function BottomNav({
     const list = threads ?? [];
     const total = list.reduce((n, t) => n + (t.unread || 0), 0);
     if (total > 0) return total > 99 ? "99+" : String(total);
-    // No number to show is not the same as nothing to say — a server that
-    // omits per-thread counts still has to surface that chat is live, so the
-    // tab carries the word instead of a silent, empty corner.
-    return "New";
+    return "";
   })();
 
   const press = useSharedValue(0);

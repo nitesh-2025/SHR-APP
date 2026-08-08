@@ -52,16 +52,12 @@ export function BalanceTile({
       style={{
         width,
         backgroundColor: bg,
-        borderRadius: radius.card,
+        borderRadius: 4,
         borderWidth: filled ? 0 : 1,
         borderColor,
         paddingHorizontal: space.lg,
         paddingTop: space.lg,
         paddingBottom: space.lg,
-        // No shadow. Inside a horizontal ScrollView the blur was being clipped
-        // by the scroll frame, which cropped the bottom corners and made the
-        // tiles look pressed into the canvas.
-        ...shadow.none,
       }}
     >
       <Text
