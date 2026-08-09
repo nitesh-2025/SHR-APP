@@ -175,7 +175,7 @@ export function Button({
       style={[
         {
           height: 52,
-          borderRadius: radius.button,
+          borderRadius: 4,
           backgroundColor: p.bg,
           borderWidth: p.border === "transparent" ? 0 : 1,
           borderColor: p.border,

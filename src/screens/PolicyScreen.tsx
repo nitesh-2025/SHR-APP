@@ -1,5 +1,14 @@
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
-import { ChevronDown, ChevronUp, LifeBuoy, type LucideIcon } from "lucide-react-native";
+import {
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
+import {
+  ChevronDown,
+  ChevronUp,
+  LifeBuoy,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -152,11 +161,11 @@ function SectionCard({
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: 4,
         borderWidth: 1,
         borderColor: c.border,
         overflow: "hidden",
-        ...(dark ? shadow.none : shadow.soft),
+        // ...(dark ? shadow.none : shadow.soft),
       }}
     >
       <Pressable
@@ -170,11 +179,21 @@ function SectionCard({
         <Text style={{ color: c.text }} className={`flex-1 ${T.cardTitleSm}`}>
           {section.title}
         </Text>
-        <Chevron size={17} strokeWidth={2.2} color={open ? brand[600] : c.textFaint} />
+        <Chevron
+          size={17}
+          strokeWidth={2.2}
+          color={open ? brand[600] : c.textFaint}
+        />
       </Pressable>
 
       {open ? (
-        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.md }}>
+        <View
+          style={{
+            paddingHorizontal: space.lg,
+            paddingBottom: space.lg,
+            gap: space.md,
+          }}
+        >
           {section.body.map((p, i) => (
             <Text
               key={i}
@@ -220,7 +239,10 @@ export default function PolicyScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={{ color: c.textMuted }} className={`leading-[21px] ${T.secondary}`}>
+        <Text
+          style={{ color: c.textMuted }}
+          className={`leading-[21px] ${T.secondary}`}
+        >
           {content.intro}
         </Text>
 
