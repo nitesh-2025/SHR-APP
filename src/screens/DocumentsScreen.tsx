@@ -1,15 +1,29 @@
 import { useNavigation } from "@react-navigation/native";
 import {
   BadgeCheck,
-  ExternalLink,
+  Download,
   FileText,
+  Image as ImageIcon,
   TriangleAlert,
 } from "lucide-react-native";
-import { useMemo } from "react";
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
+import {
+  DocumentPreview,
+  downloadDocument,
+  extensionOf,
+  isImageUrl,
+} from "../components/DocumentPreview";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
@@ -71,8 +85,18 @@ function mask(value?: string): string | undefined {
   return `•••• ${v.slice(-4)}`;
 }
 
-function DocRow({ row, onOpen }: { row: Row; onOpen: (url: string) => void }) {
-  const { c, dark } = useTheme();
+function DocRow({
+  row,
+  onPreview,
+  onDownload,
+  downloading,
+}: {
+  row: Row;
+  onPreview: (row: Row) => void;
+  onDownload: (row: Row) => void;
+  downloading: boolean;
+}) {
+  const { c, dark, brand, tint } = useTheme();
   const tone = toneFor(
     row.verified === true
       ? surface.success
@@ -82,46 +106,90 @@ function DocRow({ row, onOpen }: { row: Row; onOpen: (url: string) => void }) {
     dark,
   );
 
+  // The glyph says what will happen when the row is tapped: a photo opens as a
+  // picture, everything else opens as a document. Same well, different promise.
+  const Glyph = row.url && isImageUrl(row.url) ? ImageIcon : FileText;
+  const ext = row.url ? extensionOf(row.url).toUpperCase() : "";
+
   const body = (
     <View className="flex-row items-center gap-3">
       <View
         style={{ backgroundColor: tone.bg, borderRadius: radius.well - 2 }}
         className="h-11 w-11 items-center justify-center"
       >
-        <FileText size={19} strokeWidth={2} color={tone.tint} />
+        <Glyph size={19} strokeWidth={2} color={tone.tint} />
       </View>
 
       <View className="flex-1">
-        <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={1}>
-          {row.label}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text
+            style={{ color: c.text }}
+            className={`shrink ${T.cardTitleSm}`}
+            numberOfLines={1}
+          >
+            {row.label}
+          </Text>
+
+          {row.verified === true ? (
+            <Badge
+              label="Verified"
+              tone={surface.success}
+              icon={
+                <BadgeCheck
+                  size={11}
+                  strokeWidth={2.6}
+                  color={surface.success.tint}
+                />
+              }
+            />
+          ) : row.verified === false ? (
+            <Badge label="Pending" tone={surface.warning} />
+          ) : (
+            /* HR never stated a verification status for this one. "On file" is
+               what the record actually says; "Pending" would be us inventing it. */
+            <Badge label="On file" tone={surface.neutral} />
+          )}
+        </View>
+
         <Text
           style={{ color: c.textMuted }}
           className={`mt-0.5 ${T.micro}`}
           numberOfLines={1}
         >
-          {[row.number, row.uploadedAt ? `Added ${fmtDayShort(row.uploadedAt)}` : null]
+          {[
+            row.number,
+            ext || null,
+            row.uploadedAt ? `Added ${fmtDayShort(row.uploadedAt)}` : null,
+          ]
             .filter(Boolean)
             .join(" · ") || (row.url ? "On file" : "Not uploaded")}
         </Text>
       </View>
 
-      {row.verified === true ? (
-        <Badge
-          label="Verified"
-          tone={surface.success}
-          icon={<BadgeCheck size={11} strokeWidth={2.6} color={surface.success.tint} />}
-        />
-      ) : row.verified === false ? (
-        <Badge label="Pending" tone={surface.warning} />
-      ) : (
-        /* HR never stated a verification status for this one. "On file" is
-           what the record actually says; "Pending" would be us inventing it. */
-        <Badge label="On file" tone={surface.neutral} />
-      )}
-
+      {/* Download sits on the row itself, not only inside the preview: the
+          common case is "send HR my PAN", and that should not need a full-screen
+          viewer opened and closed on the way. */}
       {row.url ? (
-        <ExternalLink size={16} strokeWidth={2} color={c.textFaint} />
+        <Pressable
+          onPress={() => onDownload(row)}
+          disabled={downloading}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Download ${row.label}`}
+          accessibilityState={{ busy: downloading }}
+          style={({ pressed }) => ({
+            backgroundColor: tint.bg,
+            borderRadius: radius.well - 4,
+            opacity: downloading ? 0.6 : pressed ? 0.7 : 1,
+          })}
+          className="h-9 w-9 items-center justify-center"
+        >
+          {downloading ? (
+            <ActivityIndicator size="small" color={brand[600]} />
+          ) : (
+            <Download size={16} strokeWidth={2.2} color={brand[600]} />
+          )}
+        </Pressable>
       ) : null}
     </View>
   );
@@ -132,9 +200,9 @@ function DocRow({ row, onOpen }: { row: Row; onOpen: (url: string) => void }) {
 
   return (
     <Pressable
-      onPress={() => onOpen(row.url!)}
-      accessibilityRole="link"
-      accessibilityLabel={`Open ${row.label}`}
+      onPress={() => onPreview(row)}
+      accessibilityRole="button"
+      accessibilityLabel={`Preview ${row.label}`}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       className="py-1"
     >
@@ -210,13 +278,21 @@ export default function DocumentsScreen() {
   const flagged = rows.filter((r) => r.verified !== null);
   const verified = flagged.filter((r) => r.verified).length;
 
-  const open = async (url: string) => {
+  // Which row's file is on screen, and which row is currently being fetched.
+  // Keyed by row, not a boolean: two taps on two rows must not make both
+  // spinners turn.
+  const [preview, setPreview] = useState<Row | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const download = async (row: Row) => {
+    if (!row.url) return;
+    setBusyKey(row.key);
     try {
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) throw new Error("unsupported");
-      await Linking.openURL(url);
+      await downloadDocument(row.url, row.label);
     } catch {
-      toast.error("Could not open this file", "The stored link is not reachable.");
+      toast.error("Download failed", "The stored link is not reachable.");
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -254,7 +330,9 @@ export default function DocumentsScreen() {
           </View>
         ) : profile.error ? (
           <EmptyState
-            icon={<TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />}
+            icon={
+              <TriangleAlert size={32} strokeWidth={1.6} color={brand[600]} />
+            }
             title="Could not load your documents"
             message={describeApiError(profile.error).title}
             actionLabel="Try again"
@@ -270,17 +348,22 @@ export default function DocumentsScreen() {
           <View
             style={{
               backgroundColor: c.card,
-              borderRadius: radius.card,
+              borderRadius: 4,
               borderWidth: 1,
               borderColor: c.border,
               padding: space.lg + 2,
               gap: space.md,
-              ...(dark ? shadow.none : shadow.card),
+              // ...(dark ? shadow.none : shadow.card),
             }}
           >
             {rows.map((r, i) => (
               <View key={r.key}>
-                <DocRow row={r} onOpen={open} />
+                <DocRow
+                  row={r}
+                  onPreview={setPreview}
+                  onDownload={download}
+                  downloading={busyKey === r.key}
+                />
                 {i === rows.length - 1 ? null : (
                   <View
                     style={{ backgroundColor: c.border, marginLeft: 56 }}
@@ -292,13 +375,24 @@ export default function DocumentsScreen() {
           </View>
         )}
 
-        <Text style={{ color: c.textFaint }} className={`mt-4 leading-4 ${T.micro}`}>
-          Uploading and correcting documents is done by HR. ID numbers are shown
-          part-masked on purpose.
+        <Text
+          style={{ color: c.textFaint }}
+          className={`mt-4 leading-4 ${T.micro}`}
+        >
+          Tap a row to preview it, or the arrow to save a copy. Uploading and
+          correcting documents is done by HR — ID numbers are shown part-masked
+          on purpose.
         </Text>
       </ScrollView>
 
       <BottomNav active={null} onSelect={go} />
+
+      <DocumentPreview
+        visible={preview !== null}
+        url={preview?.url ?? null}
+        label={preview?.label ?? "Document"}
+        onClose={() => setPreview(null)}
+      />
     </View>
   );
 }
