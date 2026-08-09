@@ -4,7 +4,24 @@ import {
   type NavigationProp,
   type RouteProp,
 } from '@react-navigation/native';
-import { ChevronLeft, Lock } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  Hash,
+  HeartHandshake,
+  Home,
+  IdCard,
+  Landmark,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  Sparkles,
+  TriangleAlert,
+  UserRound,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -17,6 +34,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ConfirmSheet } from '../components/ConfirmSheet';
+import { DateField } from '../components/DateField';
 import { Button, EmptyState, Skeleton } from '../components/ui';
 import { describeApiError, toastApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
@@ -30,6 +49,7 @@ import {
 import { radius, space, surface, toneFor } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
+import { ymd } from '../utils/date';
 
 export type ProfileSection =
   | 'personal'
@@ -58,12 +78,27 @@ interface FieldSpec {
   placeholder: string;
   kind?: FieldKind;
   choices?: { value: string; label: string }[];
+  /**
+   * Lay the choices out as wrapping chips instead of one equal-width row.
+   * Three options fit a row; eight blood groups at 1/8th width each are 40px
+   * boxes with "AB−" clipped inside them.
+   */
+  wrap?: boolean;
   /** Sentence-case for free text; names stay word-case; ids stay untouched. */
   caps?: 'none' | 'words' | 'sentences' | 'characters';
   /** Rendered under the input, always — not an error, just what to type. */
   hint?: string;
   /** Checked only when the field is non-empty AND changed. Return null if fine. */
   validate?: (v: string) => string | null;
+  /**
+   * Sub-heading this field opens. Rendered once, above it.
+   *
+   * "Personal Information" is ten fields deep — an unbroken column of ten
+   * identical inputs is where a form stops being read and starts being endured.
+   */
+  group?: string;
+  /** Leading glyph inside the input. Gives the column something to scan by. */
+  icon?: LucideIcon;
 }
 
 /**
@@ -85,15 +120,39 @@ const SECTIONS: Record<
     title: 'Personal Information',
     subtitle: 'How the company reaches you, and who you are on paper',
     fields: [
-      { path: 'phone', label: 'Phone', placeholder: '10-digit mobile', kind: 'phone', caps: 'none' },
+      {
+        path: 'phone',
+        label: 'Phone',
+        placeholder: '10-digit mobile',
+        kind: 'phone',
+        caps: 'none',
+        group: 'How we reach you',
+        icon: Phone,
+      },
       {
         path: 'personal_email',
         label: 'Personal email',
         placeholder: 'you@example.com',
         kind: 'email',
         caps: 'none',
+        hint: 'Used if you ever lose access to your work address.',
+        icon: Mail,
       },
-      { path: 'date_of_birth', label: 'Date of birth', placeholder: 'YYYY-MM-DD', kind: 'date', caps: 'none' },
+      {
+        path: 'location',
+        label: 'Work location',
+        placeholder: 'City / office',
+        caps: 'words',
+        icon: MapPin,
+      },
+      {
+        path: 'date_of_birth',
+        label: 'Date of birth',
+        placeholder: 'Pick your birth date',
+        kind: 'date',
+        caps: 'none',
+        group: 'About you',
+      },
       {
         path: 'gender',
         label: 'Gender',
@@ -116,22 +175,53 @@ const SECTIONS: Record<
           { value: 'other', label: 'Other' },
         ],
       },
-      { path: 'blood_group', label: 'Blood group', placeholder: 'e.g. O+', caps: 'characters' },
-      { path: 'father_name', label: "Father's name", placeholder: 'Full name' },
-      { path: 'mother_name', label: "Mother's name", placeholder: 'Full name' },
-      { path: 'address', label: 'Address', placeholder: 'House, street, city, PIN', caps: 'sentences' },
-      { path: 'location', label: 'Work location', placeholder: 'City / office', caps: 'words' },
+      {
+        // A blood group has eight legal values and a person types it once —
+        // a free-text box here only invites "o positive", "O +ve" and "0+",
+        // none of which are what the field is for.
+        path: 'blood_group',
+        label: 'Blood group',
+        placeholder: 'Select',
+        kind: 'choice',
+        wrap: true,
+        choices: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((v) => ({
+          value: v,
+          label: v,
+        })),
+      },
+      {
+        path: 'father_name',
+        label: "Father's name",
+        placeholder: 'Full name',
+        group: 'Family',
+        icon: Users,
+      },
+      { path: 'mother_name', label: "Mother's name", placeholder: 'Full name', icon: Users },
+      {
+        path: 'address',
+        label: 'Address',
+        placeholder: 'House, street, city, PIN',
+        caps: 'sentences',
+        group: 'Where you live',
+        icon: Home,
+      },
     ],
   },
   emergency: {
     title: 'Emergency Contact',
     subtitle: 'Who the company calls if something happens at work',
     fields: [
-      { path: 'emergency_contact.name', label: 'Contact name', placeholder: 'Full name' },
+      {
+        path: 'emergency_contact.name',
+        label: 'Contact name',
+        placeholder: 'Full name',
+        icon: UserRound,
+      },
       {
         path: 'emergency_contact.relation',
         label: 'Relationship',
         placeholder: 'e.g. Spouse, Father',
+        icon: HeartHandshake,
       },
       {
         path: 'emergency_contact.phone',
@@ -139,6 +229,7 @@ const SECTIONS: Record<
         placeholder: '10-digit mobile',
         kind: 'phone',
         caps: 'none',
+        icon: Phone,
       },
     ],
   },
@@ -150,6 +241,8 @@ const SECTIONS: Record<
         path: 'bank_details.account_holder_name',
         label: 'Account holder name',
         placeholder: 'Exactly as printed on the passbook',
+        hint: 'A mismatch here is the usual reason a salary transfer bounces.',
+        icon: UserRound,
       },
       {
         path: 'bank_details.account_number',
@@ -157,15 +250,28 @@ const SECTIONS: Record<
         placeholder: 'Account number',
         kind: 'phone',
         caps: 'none',
+        icon: Hash,
       },
       {
         path: 'bank_details.ifsc_code',
         label: 'IFSC code',
         placeholder: 'e.g. HDFC0001234',
         caps: 'characters',
+        hint: 'Four letters, a zero, then six characters.',
+        icon: Landmark,
       },
-      { path: 'bank_details.bank_name', label: 'Bank name', placeholder: 'Bank' },
-      { path: 'bank_details.branch', label: 'Branch', placeholder: 'Branch' },
+      {
+        path: 'bank_details.bank_name',
+        label: 'Bank name',
+        placeholder: 'Bank',
+        icon: Landmark,
+      },
+      {
+        path: 'bank_details.branch',
+        label: 'Branch',
+        placeholder: 'Branch',
+        icon: MapPin,
+      },
     ],
   },
   statutory: {
@@ -177,6 +283,7 @@ const SECTIONS: Record<
         label: 'PAN',
         placeholder: 'ABCDE1234F',
         caps: 'characters',
+        icon: IdCard,
         hint: 'Five letters, four digits, one letter.',
         validate: (v) =>
           /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v) ? null : 'A PAN looks like ABCDE1234F.',
@@ -187,6 +294,7 @@ const SECTIONS: Record<
         placeholder: '12-digit number',
         kind: 'phone',
         caps: 'none',
+        icon: IdCard,
         validate: (v) =>
           v.replace(/\D/g, '').length === 12 ? null : 'An Aadhaar number is 12 digits.',
       },
@@ -196,6 +304,7 @@ const SECTIONS: Record<
         placeholder: '12-digit universal account number',
         kind: 'phone',
         caps: 'none',
+        icon: Hash,
         hint: 'Your PF universal account number, if you have one.',
         validate: (v) =>
           v.replace(/\D/g, '').length === 12 ? null : 'A UAN is 12 digits.',
@@ -205,6 +314,7 @@ const SECTIONS: Record<
         label: 'PF account number',
         placeholder: 'e.g. MH/BAN/1234567/000/0001234',
         caps: 'characters',
+        icon: Hash,
       },
       {
         path: 'statutory.esic.number',
@@ -276,7 +386,211 @@ function valueFor(spec: FieldSpec, raw: string): unknown {
 /** `2026-08-01` and nothing else — the server stores a date, not a sentence. */
 const isYmd = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
+/**
+ * One rule set, two callers: the blur handler and Save.
+ *
+ * They used to be one inline block inside `save`, which meant a bad IFSC was
+ * only reported after the whole form had been filled and the button pressed.
+ * Returns `null` for "fine", including for an empty value — clearing a field is
+ * always allowed.
+ */
+function validateField(spec: FieldSpec, raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+
+  if (spec.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+    return 'That does not look like an email address.';
+  }
+  if (spec.kind === 'date' && !isYmd(v)) {
+    return 'Use YYYY-MM-DD, e.g. 1996-04-21.';
+  }
+  if (spec.path === 'phone' && v.replace(/\D/g, '').length < 10) {
+    return 'A phone number needs at least 10 digits.';
+  }
+  if (spec.path === 'bank_details.ifsc_code' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v)) {
+    return 'An IFSC looks like HDFC0001234.';
+  }
+  // Per-field rule from the spec (PAN, Aadhaar, UAN, ESIC…). Runs last so a
+  // field can carry its own message without this block knowing its shape.
+  return spec.validate?.(v) ?? null;
+}
+
 /* ── Input ────────────────────────────────────────────────────────────────── */
+
+/**
+ * The input surface.
+ *
+ * This screen paints its canvas `c.card` (white in light, slate-800 in dark) so
+ * that the FIELDS can be the recessed thing on it: `c.bg` is white smoke in
+ * light and near-black in dark, and a 1px hairline draws the box.
+ *
+ * The old pairing was the other way round — a `fill`-coloured input on a `bg`
+ * canvas of almost the same value, with a transparent border. On device that
+ * read as text floating on the page rather than as a field you could type in,
+ * which is exactly the "input jaisa nahi lag raha" report.
+ */
+function useFieldSurface() {
+  const { c } = useTheme();
+  return { fill: c.bg, border: c.border };
+}
+
+/** Label + the line under the input, shared by every field kind. */
+function FieldShell({
+  spec,
+  error,
+  children,
+  /** For controls that draw their own label (`DateField`) — no double heading. */
+  hideLabel = false,
+}: {
+  spec: FieldSpec;
+  error?: string;
+  children: React.ReactNode;
+  hideLabel?: boolean;
+}) {
+  const { c, dark } = useTheme();
+  return (
+    <View>
+      {hideLabel ? null : (
+        <Text style={{ color: c.textMuted }} className={T.label}>
+          {spec.label}
+        </Text>
+      )}
+      {children}
+      {/* The error replaces the hint rather than stacking under it — two lines
+          of guidance where one contradicts the other is how a field ends up
+          taller than the input it explains. */}
+      {error ? (
+        <Text style={{ color: toneFor(surface.danger, dark).text }} className={`mt-1 ${T.micro}`}>
+          {error}
+        </Text>
+      ) : spec.hint ? (
+        <Text style={{ color: c.textFaint }} className={`mt-1 ${T.micro}`}>
+          {spec.hint}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Skills, as chips you add and remove.
+ *
+ * It was one text box holding `"React Native, Node.js, MongoDB"`. Deleting the
+ * middle item there means placing a cursor between two commas and back-spacing
+ * exactly the right number of characters — on a phone, over a keyboard that
+ * covers half the field.
+ *
+ * The stored shape is unchanged: this still reads and writes the same
+ * comma-joined string, so `valueFor` keeps splitting it into an array.
+ */
+function TagField({
+  spec,
+  value,
+  disabled,
+  onChange,
+}: {
+  spec: FieldSpec;
+  value: string;
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const { c, brand, tint } = useTheme();
+  const field = useFieldSurface();
+  const [draft, setDraft] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const tags = value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const commit = (raw: string) => {
+    const next = raw.trim().replace(/,+$/, '').trim();
+    // Case-insensitive: "react native" and "React Native" are one skill, and a
+    // list holding both looks like the form is not paying attention.
+    if (!next || tags.some((t) => t.toLowerCase() === next.toLowerCase())) {
+      setDraft('');
+      return;
+    }
+    onChange([...tags, next].join(', '));
+    setDraft('');
+  };
+
+  const remove = (tag: string) => onChange(tags.filter((t) => t !== tag).join(', '));
+
+  return (
+    <View>
+      {tags.length > 0 ? (
+        <View className="mt-1.5 flex-row flex-wrap" style={{ gap: space.sm }}>
+          {tags.map((tag) => (
+            <View
+              key={tag}
+              style={{
+                backgroundColor: tint.bg,
+                borderColor: tint.border,
+                borderWidth: 1,
+                borderRadius: radius.pill,
+                opacity: disabled ? 0.5 : 1,
+              }}
+              className="flex-row items-center gap-1.5 py-1.5 pl-3 pr-2"
+            >
+              <Text style={{ color: tint.text }} className={T.badge}>
+                {tag}
+              </Text>
+              <Pressable
+                onPress={() => (disabled ? undefined : remove(tag))}
+                disabled={disabled}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${tag}`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+              >
+                <X size={13} strokeWidth={2.4} color={tint.tint} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View
+        style={{
+          marginTop: space.sm,
+          backgroundColor: field.fill,
+          borderRadius: radius.input,
+          borderWidth: 1,
+          borderColor: focused ? brand[500] : field.border,
+          paddingHorizontal: space.md,
+          opacity: disabled ? 0.6 : 1,
+        }}
+        className="h-[50px] flex-row items-center gap-2.5"
+      >
+        <Sparkles size={17} strokeWidth={2} color={focused ? brand[600] : c.textFaint} />
+        <TextInput
+          value={draft}
+          onChangeText={(t) => (t.endsWith(',') ? commit(t) : setDraft(t))}
+          onSubmitEditing={() => commit(draft)}
+          // Whatever is half-typed when the field loses focus is still a skill
+          // the user meant to add — dropping it is the classic tag-input bug.
+          onBlur={() => {
+            setFocused(false);
+            commit(draft);
+          }}
+          onFocus={() => setFocused(true)}
+          editable={!disabled}
+          placeholder={tags.length ? 'Add another…' : spec.placeholder}
+          placeholderTextColor={c.textFaint}
+          returnKeyType="done"
+          // Stay focused after Return so several skills can be typed in a row.
+          submitBehavior="submit"
+          autoCapitalize="words"
+          autoCorrect={false}
+          style={{ flex: 1, color: c.text, fontFamily: 'Outfit_500Medium', fontSize: 14.5 }}
+          accessibilityLabel={spec.label}
+        />
+      </View>
+    </View>
+  );
+}
 
 function FieldInput({
   spec,
@@ -284,23 +598,56 @@ function FieldInput({
   error,
   disabled,
   onChange,
+  onBlur,
 }: {
   spec: FieldSpec;
   value: string;
   error?: string;
   disabled: boolean;
   onChange: (v: string) => void;
+  /** Validate as soon as the field is left, not only when Save is pressed. */
+  onBlur: () => void;
 }) {
-  const { c, brand, tint, dark } = useTheme();
+  const { c, brand, tint } = useTheme();
+  const field = useFieldSurface();
+  const [focused, setFocused] = useState(false);
+
+  if (spec.kind === 'tags') {
+    return (
+      <FieldShell spec={spec} error={error}>
+        <TagField spec={spec} value={value} disabled={disabled} onChange={onChange} />
+      </FieldShell>
+    );
+  }
+
+  if (spec.kind === 'date') {
+    return (
+      /* `DateField` draws its own label. It still goes through the shell so the
+         error and hint lines are identical to every other field. */
+      <FieldShell spec={spec} error={error} hideLabel>
+        <View style={{ opacity: disabled ? 0.6 : 1 }}>
+          <DateField
+            label={spec.label}
+            value={value}
+            placeholder={spec.placeholder}
+            onChange={disabled ? () => {} : onChange}
+            max={ymd(new Date())}
+            fill={field.fill}
+          />
+        </View>
+      </FieldShell>
+    );
+  }
 
   if (spec.kind === 'choice') {
+    const choices = spec.choices ?? [];
     return (
-      <View>
-        <Text style={{ color: c.textMuted }} className={T.label}>
-          {spec.label}
-        </Text>
-        <View className="mt-1.5 flex-row" style={{ gap: space.sm }}>
-          {(spec.choices ?? []).map((o) => {
+      <FieldShell spec={spec} error={error}>
+        <View
+          className={`mt-1.5 flex-row ${spec.wrap ? 'flex-wrap' : ''}`}
+          style={{ gap: space.sm }}
+        >
+          {choices.map((o) => {
             const active = o.value === value;
             return (
               <Pressable
@@ -311,18 +658,22 @@ function FieldInput({
                 accessibilityState={{ selected: active, disabled }}
                 accessibilityLabel={`${spec.label}: ${o.label}`}
                 style={({ pressed }) => ({
-                  flex: 1,
+                  // Wrapped chips hug their label; a row of three splits the
+                  // width evenly.
+                  flex: spec.wrap ? undefined : 1,
+                  minWidth: spec.wrap ? 62 : undefined,
+                  paddingHorizontal: spec.wrap ? space.md : 0,
                   height: 46,
-                  backgroundColor: active ? tint.bg : c.fill,
-                  borderRadius: radius.well,
+                  backgroundColor: active ? tint.bg : field.fill,
+                  borderRadius: spec.wrap ? radius.pill : radius.well,
                   borderWidth: 1,
-                  borderColor: active ? brand[600] : 'transparent',
+                  borderColor: active ? brand[600] : field.border,
                   opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
                 })}
                 className="items-center justify-center"
               >
                 <Text
-                  style={{ color: active ? brand[700] : c.textMuted }}
+                  style={{ color: active ? tint.text : c.textMuted }}
                   className={T.buttonSm}
                 >
                   {o.label}
@@ -331,36 +682,57 @@ function FieldInput({
             );
           })}
         </View>
-      </View>
+      </FieldShell>
     );
   }
 
-  // Address and a skill list are both things people keep adding to — one line
-  // that scrolls sideways hides what was already typed.
-  const multiline = spec.path === 'address' || spec.kind === 'tags';
+  // Address is the one thing people keep adding to — a single line that scrolls
+  // sideways hides what was already typed.
+  const multiline = spec.path === 'address';
+  const Icon = spec.icon;
+
+  // Precedence matters: a field that is BOTH focused and in error shows the
+  // error. Turning the border brand-green the moment it is tapped would read as
+  // "fixed" while the message underneath still says it is not.
+  const border = error
+    ? surface.danger.tint
+    : focused
+      ? brand[500]
+      : field.border;
 
   return (
-    <View>
-      <Text style={{ color: c.textMuted }} className={T.label}>
-        {spec.label}
-      </Text>
+    <FieldShell spec={spec} error={error}>
       <View
         style={{
           marginTop: 6,
-          backgroundColor: c.fill,
+          backgroundColor: field.fill,
           borderRadius: radius.input,
           borderWidth: 1,
-          borderColor: error ? surface.danger.tint : 'transparent',
-          paddingHorizontal: space.lg,
+          borderColor: border,
+          paddingHorizontal: space.md,
           paddingVertical: multiline ? space.md : 0,
-          minHeight: multiline ? 88 : 50,
+          minHeight: multiline ? 96 : 50,
           opacity: disabled ? 0.6 : 1,
         }}
-        className={multiline ? '' : 'justify-center'}
+        className={`flex-row gap-2.5 ${multiline ? 'items-start' : 'items-center'}`}
       >
+        {Icon ? (
+          <Icon
+            size={17}
+            strokeWidth={2}
+            color={error ? surface.danger.tint : focused ? brand[600] : c.textFaint}
+            style={multiline ? { marginTop: 3 } : undefined}
+          />
+        ) : null}
+
         <TextInput
           value={value}
           onChangeText={onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            onBlur();
+          }}
           editable={!disabled}
           placeholder={spec.placeholder}
           placeholderTextColor={c.textFaint}
@@ -375,23 +747,17 @@ function FieldInput({
           }
           autoCapitalize={spec.caps ?? 'words'}
           autoCorrect={false}
-          style={{ color: c.text, fontFamily: 'Outfit_500Medium', fontSize: 14.5 }}
+          style={{
+            flex: 1,
+            color: c.text,
+            fontFamily: 'Outfit_500Medium',
+            fontSize: 14.5,
+            paddingVertical: 0,
+          }}
           accessibilityLabel={spec.label}
         />
       </View>
-      {/* The error replaces the hint rather than stacking under it — two lines
-          of guidance where one contradicts the other is how a field ends up
-          taller than the input it explains. */}
-      {error ? (
-        <Text style={{ color: toneFor(surface.danger, dark).text }} className={`mt-1 ${T.micro}`}>
-          {error}
-        </Text>
-      ) : spec.hint ? (
-        <Text style={{ color: c.textFaint }} className={`mt-1 ${T.micro}`}>
-          {spec.hint}
-        </Text>
-      ) : null}
-    </View>
+    </FieldShell>
   );
 }
 
@@ -448,32 +814,29 @@ export default function ProfileEditScreen() {
     [spec, values, original],
   );
 
+  /**
+   * Leaving with unsaved edits.
+   *
+   * The form has no auto-save, so a stray back-swipe on a ten-field section
+   * threw the lot away silently. Only asks when there is actually something to
+   * lose — a confirm on an untouched form is a tax on reading your own record.
+   */
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const leave = () => {
+    if (dirty.length > 0 && !saving) setConfirmLeave(true);
+    else navigation.goBack();
+  };
+
   const save = async () => {
     if (locked || dirty.length === 0) return;
 
     // Validate only what is being SENT — an old bad value already on the record
     // is not this save's problem to block. Clearing a field is always allowed,
-    // so an empty value skips validation entirely.
+    // so an empty value skips validation entirely (see `validateField`).
     const found: Record<string, string> = {};
     for (const f of dirty) {
-      const v = (values[f.path] ?? '').trim();
-      if (!v) continue;
-      if (f.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
-        found[f.path] = 'That does not look like an email address.';
-      }
-      if (f.kind === 'date' && !isYmd(v)) {
-        found[f.path] = 'Use YYYY-MM-DD, e.g. 1996-04-21.';
-      }
-      if (f.path === 'phone' && v.replace(/\D/g, '').length < 10) {
-        found[f.path] = 'A phone number needs at least 10 digits.';
-      }
-      if (f.path === 'bank_details.ifsc_code' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(v)) {
-        found[f.path] = 'An IFSC looks like HDFC0001234.';
-      }
-      // Per-field rule from the spec (PAN, Aadhaar, UAN, ESIC…). Runs last so a
-      // field can carry its own message without this block knowing its shape.
-      const own = f.validate?.(v);
-      if (own) found[f.path] = own;
+      const message = validateField(f, values[f.path] ?? '');
+      if (message) found[f.path] = message;
     }
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -512,7 +875,10 @@ export default function ProfileEditScreen() {
   };
 
   return (
-    <View style={{ backgroundColor: c.bg }} className="flex-1">
+    /* The canvas is `card`, not `bg` — inverted from every other screen on
+       purpose. The fields are the recessed thing here, and they can only read
+       that way if the page behind them is the lighter surface. */
+    <View style={{ backgroundColor: c.card }} className="flex-1">
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <View
         style={{
@@ -523,7 +889,7 @@ export default function ProfileEditScreen() {
         className="flex-row items-center gap-3"
       >
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={leave}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -595,24 +961,53 @@ export default function ProfileEditScreen() {
               ) : null}
 
               {spec.fields.map((f) => (
-                <FieldInput
-                  key={f.path}
-                  spec={f}
-                  value={values[f.path] ?? ''}
-                  error={errors[f.path]}
-                  disabled={locked || saving}
-                  onChange={(v) => {
-                    setTouched(true);
-                    setValues((prev) => ({ ...prev, [f.path]: v }));
-                    if (errors[f.path]) {
+                <View key={f.path} style={{ gap: space.lg }}>
+                  {/* A sub-heading opens its group. Ten identical inputs in one
+                      column is where a form stops being read. */}
+                  {f.group ? (
+                    <Text
+                      style={{
+                        color: c.textFaint,
+                        letterSpacing: 0.7,
+                        marginTop: space.sm,
+                      }}
+                      className={T.micro}
+                    >
+                      {f.group.toUpperCase()}
+                    </Text>
+                  ) : null}
+
+                  <FieldInput
+                    spec={f}
+                    value={values[f.path] ?? ''}
+                    error={errors[f.path]}
+                    disabled={locked || saving}
+                    onBlur={() => {
+                      // Only complain about a field the user actually changed —
+                      // flagging a bad value HR put there, the moment the screen
+                      // is opened, is not this form's argument to have.
+                      if ((values[f.path] ?? '') === (original[f.path] ?? '')) return;
+                      const message = validateField(f, values[f.path] ?? '');
                       setErrors((prev) => {
                         const next = { ...prev };
-                        delete next[f.path];
+                        if (message) next[f.path] = message;
+                        else delete next[f.path];
                         return next;
                       });
-                    }
-                  }}
-                />
+                    }}
+                    onChange={(v) => {
+                      setTouched(true);
+                      setValues((prev) => ({ ...prev, [f.path]: v }));
+                      if (errors[f.path]) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next[f.path];
+                          return next;
+                        });
+                      }
+                    }}
+                  />
+                </View>
               ))}
             </>
           )}
@@ -641,6 +1036,21 @@ export default function ProfileEditScreen() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
+
+      <ConfirmSheet
+        visible={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        onConfirm={() => {
+          setConfirmLeave(false);
+          navigation.goBack();
+        }}
+        icon={TriangleAlert}
+        tone="warning"
+        title="Leave without saving?"
+        message={`${dirty.length} ${dirty.length === 1 ? 'change is' : 'changes are'} not saved yet. Going back now discards ${dirty.length === 1 ? 'it' : 'them'}.`}
+        confirmLabel="Yes, discard"
+        cancelLabel="No, keep editing"
+      />
     </View>
   );
 }

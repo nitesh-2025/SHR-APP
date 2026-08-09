@@ -1,4 +1,9 @@
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -16,11 +21,17 @@ import { fmtDate, parseYmd, WEEKDAYS, ymd, MONTHS_LONG } from '../utils/date';
  * No date-picker dependency either — the grid is ~40 lines and renders the same
  * on both platforms, which the native pickers famously do not.
  */
+/** Years shown per page in the year grid — 4 columns × 6 rows. */
+const YEAR_PAGE = 24;
+
 export function DateField({
   label,
   value,
   onChange,
   min,
+  max,
+  placeholder,
+  fill,
 }: {
   label: string;
   /** `YYYY-MM-DD`. */
@@ -28,18 +39,42 @@ export function DateField({
   onChange: (next: string) => void;
   /** Earliest selectable day, `YYYY-MM-DD`. Days before it render inert. */
   min?: string;
+  /** Latest selectable day, `YYYY-MM-DD`. A date of birth cannot be tomorrow. */
+  max?: string;
+  /** Shown when there is no value yet, in place of a formatted date. */
+  placeholder?: string;
+  /**
+   * Trigger background. Defaults to `card`, which is right on a `bg` canvas —
+   * a form that inverts that (white page, recessed fields) passes its own.
+   */
+  fill?: string;
 }) {
   // `tint`, not `primary` — the latter is the as-authored light recipe, whose
   // 50-step fill is a near-white slab on a dark canvas.
   const { brand, c, tint } = useTheme();
   const [open, setOpen] = useState(false);
 
+  /**
+   * Which grid is showing.
+   *
+   * A date of birth is ~30 years back, and month-at-a-time navigation makes
+   * that 360 taps. Tapping the title drops to years → months → days, which is
+   * three taps to anywhere — the same flow as the platform pickers, so nobody
+   * has to be taught it.
+   */
+  const [view, setView] = useState<"days" | "months" | "years">("days");
+
   const selected = parseYmd(value) ?? new Date();
   const [cursor, setCursor] = useState(
     () => new Date(selected.getFullYear(), selected.getMonth(), 1),
   );
+  /** First year of the visible year page. */
+  const [yearPage, setYearPage] = useState(
+    () => selected.getFullYear() - (selected.getFullYear() % YEAR_PAGE),
+  );
 
   const minDate = parseYmd(min);
+  const maxDate = parseYmd(max);
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
 
@@ -61,12 +96,15 @@ export function DateField({
       </Text>
 
       <Pressable
-        onPress={() => setOpen((o) => !o)}
+        onPress={() => {
+          setOpen((o) => !o);
+          setView("days");
+        }}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${fmtDate(value)}`}
+        accessibilityLabel={`${label}: ${value ? fmtDate(value) : "not set"}`}
         accessibilityState={{ expanded: open }}
         style={({ pressed }) => ({
-          backgroundColor: c.card,
+          backgroundColor: fill ?? c.card,
           borderColor: open ? brand[500] : c.border,
           opacity: pressed ? 0.8 : 1,
         })}
@@ -79,11 +117,11 @@ export function DateField({
           <CalendarDays size={14} strokeWidth={2.2} color={brand[600]} />
         </View>
         <Text
-          style={{ color: c.text }}
+          style={{ color: value ? c.text : c.textFaint }}
           className="flex-1 font-ui text-[13.5px]"
           numberOfLines={1}
         >
-          {fmtDate(value)}
+          {value ? fmtDate(value) : (placeholder ?? "Select a date")}
         </Text>
       </Pressable>
 
@@ -92,32 +130,77 @@ export function DateField({
           style={{ backgroundColor: c.card, borderColor: c.border }}
           className="mt-2 rounded-2xl border p-3"
         >
-          {/* Month nav */}
+          {/* Nav. The arrows step whatever is on screen — a month, or a page
+              of years — so one control serves all three grids. */}
           <View className="flex-row items-center justify-between pb-2">
             <Pressable
               onPress={() =>
-                setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
+                view === "years"
+                  ? setYearPage((p) => p - YEAR_PAGE)
+                  : view === "months"
+                    ? setCursor(new Date(cursor.getFullYear() - 1, cursor.getMonth(), 1))
+                    : setCursor(
+                        new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
+                      )
               }
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Previous month"
+              accessibilityLabel="Previous"
               className="h-7 w-7 items-center justify-center rounded-full"
               style={{ backgroundColor: tint.bg }}
             >
               <ChevronLeft size={15} strokeWidth={2.2} color={brand[600]} />
             </Pressable>
 
-            <Text style={{ color: c.text }} className="font-ui-semibold text-[13px]">
-              {MONTHS_LONG[cursor.getMonth()]} {cursor.getFullYear()}
-            </Text>
+            {/* The title is the way UP a level: days → months → years. */}
+            <Pressable
+              onPress={() => {
+                if (view === "days") setView("months");
+                else if (view === "months") {
+                  setYearPage(
+                    cursor.getFullYear() - (cursor.getFullYear() % YEAR_PAGE),
+                  );
+                  setView("years");
+                } else setView("days");
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                view === "days"
+                  ? "Choose a month"
+                  : view === "months"
+                    ? "Choose a year"
+                    : "Back to days"
+              }
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.6 : 1,
+                backgroundColor: tint.bg,
+              })}
+              className="flex-row items-center gap-1 rounded-full px-3 py-1"
+            >
+              <Text style={{ color: c.text }} className="font-ui-semibold text-[13px]">
+                {view === "years"
+                  ? `${yearPage} – ${yearPage + YEAR_PAGE - 1}`
+                  : view === "months"
+                    ? cursor.getFullYear()
+                    : `${MONTHS_LONG[cursor.getMonth()]} ${cursor.getFullYear()}`}
+              </Text>
+              <ChevronDown size={13} strokeWidth={2.4} color={brand[600]} />
+            </Pressable>
 
             <Pressable
               onPress={() =>
-                setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
+                view === "years"
+                  ? setYearPage((p) => p + YEAR_PAGE)
+                  : view === "months"
+                    ? setCursor(new Date(cursor.getFullYear() + 1, cursor.getMonth(), 1))
+                    : setCursor(
+                        new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
+                      )
               }
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Next month"
+              accessibilityLabel="Next"
               className="h-7 w-7 items-center justify-center rounded-full"
               style={{ backgroundColor: tint.bg }}
             >
@@ -125,6 +208,87 @@ export function DateField({
             </Pressable>
           </View>
 
+          {view === "years" ? (
+            <View className="flex-row flex-wrap">
+              {Array.from({ length: YEAR_PAGE }, (_, i) => yearPage + i).map(
+                (year) => {
+                  const active = year === cursor.getFullYear();
+                  const outOfRange =
+                    (minDate && year < minDate.getFullYear()) ||
+                    (maxDate && year > maxDate.getFullYear());
+                  return (
+                    <Pressable
+                      key={year}
+                      onPress={() => {
+                        if (outOfRange) return;
+                        setCursor(new Date(year, cursor.getMonth(), 1));
+                        setView("months");
+                      }}
+                      disabled={Boolean(outOfRange)}
+                      accessibilityRole="button"
+                      accessibilityLabel={String(year)}
+                      accessibilityState={{ selected: active }}
+                      className="h-10 w-1/4 items-center justify-center"
+                    >
+                      <View
+                        style={{
+                          backgroundColor: active ? brand[600] : "transparent",
+                        }}
+                        className="h-8 w-full items-center justify-center rounded-full"
+                      >
+                        <Text
+                          style={{
+                            color: active
+                              ? "#FFFFFF"
+                              : outOfRange
+                                ? c.textFaint
+                                : c.text,
+                          }}
+                          className="font-ui text-[12.5px]"
+                        >
+                          {year}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                },
+              )}
+            </View>
+          ) : view === "months" ? (
+            <View className="flex-row flex-wrap">
+              {MONTHS_LONG.map((name, i) => {
+                const active = i === cursor.getMonth();
+                return (
+                  <Pressable
+                    key={name}
+                    onPress={() => {
+                      setCursor(new Date(cursor.getFullYear(), i, 1));
+                      setView("days");
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${name} ${cursor.getFullYear()}`}
+                    accessibilityState={{ selected: active }}
+                    className="h-11 w-1/3 items-center justify-center"
+                  >
+                    <View
+                      style={{
+                        backgroundColor: active ? brand[600] : "transparent",
+                      }}
+                      className="h-9 w-[92%] items-center justify-center rounded-full"
+                    >
+                      <Text
+                        style={{ color: active ? "#FFFFFF" : c.text }}
+                        className="font-ui text-[12.5px]"
+                      >
+                        {name.slice(0, 3)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <>
           <View className="flex-row">
             {WEEKDAYS.map((d, i) => (
               <Text
@@ -144,7 +308,10 @@ export function DateField({
               }
               const cellYmd = ymd(new Date(cursor.getFullYear(), cursor.getMonth(), day));
               const isSelected = cellYmd === value;
-              const disabled = Boolean(minDate && parseYmd(cellYmd)! < minDate);
+              const cellDate = parseYmd(cellYmd)!;
+              const disabled = Boolean(
+                (minDate && cellDate < minDate) || (maxDate && cellDate > maxDate),
+              );
 
               return (
                 <Pressable
@@ -179,6 +346,8 @@ export function DateField({
               );
             })}
           </View>
+            </>
+          )}
         </View>
       ) : null}
     </View>
