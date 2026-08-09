@@ -30,6 +30,7 @@ import { AppDrawer } from "../components/AppDrawer";
 import { Avatar, fullNameOf } from "../components/Avatar";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { ShiftCard } from "../components/ShiftCard";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { ProgressBar } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useMenuNav } from "../navigation/useMenuNav";
@@ -341,6 +342,12 @@ export default function ProfileScreen() {
           Profile
         </Text>
 
+        {/* Appearance, as one glyph next to the gear. It was a full-width
+            three-segment control in the page body, which spent a row of the
+            screen naming three states for a setting almost nobody opens twice.
+            The icon shows the current mode and the tap cycles. */}
+        <ThemeToggle />
+
         <Pressable
           onPress={() => setMenuOpen(true)}
           hitSlop={10}
@@ -458,12 +465,8 @@ export default function ProfileScreen() {
               onPress={() => go(e.key)}
             />
           ))}
-
-          <View
-            style={{ backgroundColor: c.border, marginLeft: 54 }}
-            className="h-px"
-          />
-
+        </View>
+        <View style={{ marginTop: space.sm, overflow: "hidden" }}>
           <Row
             entry={{
               key: "logout",
