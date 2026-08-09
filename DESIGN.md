@@ -606,13 +606,31 @@ Control **h 48**, radius 16, white fill, 1px border `neutral/200` → `brand/500
 Inside: 28 × 28 rounded-lg well (fill `primary.bg`, 1px `primary.border`) with
 CalendarDays 14 in `brand/600`, gap 8, value text UI Medium 13.5 `#0F172A`.
 
-**Expanded grid** (renders in place, margin-top 8): white card, radius 16,
-1px `neutral/100`, padding 12.
-- Month nav row: two 28 × 28 circles (fill `primary.bg`, chevrons 15 `brand/600`),
-  center label UI Semibold 13 `#0F172A`
-- Weekday header: 7 columns, UI Semibold 10, `neutral/400`, centered
-- Day cell: **14.28 % × 36**; inner **32 × 32** circle — selected = `brand/600` fill,
-  white text; disabled = `neutral/300`; normal = `neutral/700`; text UI Medium 12.5
+**Props:** `value` / `onChange` (`YYYY-MM-DD`) · `min` / `max` (out-of-range days
+render inert) · `placeholder` (shown instead of a formatted date when empty) ·
+`fill` (trigger background — defaults to `card`; the profile form passes its
+recessed field colour).
+
+**Expanded panel** (renders in place, margin-top 8): white card, radius 16,
+1px `neutral/100`, padding 12. Three grids behind one nav row.
+
+- **Nav row:** two 28 × 28 circles (fill `primary.bg`, chevrons 15 `brand/600`)
+  and, between them, a **pressable pill** (fill `primary.bg`, padding 12 h / 4 v)
+  carrying the title + ChevronDown 13. The arrows step whatever is on screen —
+  a month, a year, or a page of 24 years.
+- **Title press goes UP a level:** days → months → years → back to days.
+- **Days:** weekday header (7 columns, UI Semibold 10, `neutral/400`) then cells
+  **14.28 % × 36**, inner **32 × 32** circle — selected = `brand/600` fill, white
+  text; disabled = `neutral/300`; normal = `text`; UI Medium 12.5
+- **Months:** 3 columns × 4 rows, cell **33.3 % × 44**, inner pill h 36 w 92 %,
+  three-letter label. Selected = `brand/600` fill, white text
+- **Years:** 4 columns × 6 rows (**24 per page**), cell **25 % × 40**, inner pill
+  h 32 full width. Out-of-range years render `textFaint` and inert
+
+> **Why three grids.** A date of birth is ~30 years back, and month-at-a-time
+> navigation makes that 360 taps. Years → months → days is three taps to
+> anywhere, and it is the same flow as both platform pickers, so nobody has to
+> be taught it.
 
 ---
 
@@ -766,6 +784,32 @@ sheet" is learned once.
 | Affordance | ChevronDown **14** stroke 2.6 `brand/700` |
 | Pressed | opacity 0.75 |
 | a11y | Label must state the current value AND the verb — "Year 2026. Change year" |
+
+---
+
+### 6.20 ThemeToggle (header glyph)
+
+`src/components/ThemeToggle.tsx`. Light / dark / follow-system as **one 21px
+glyph**. In use: the Profile header, left of the Settings gear.
+
+| Element | Spec |
+|---------|------|
+| Hit area | **44 × 44**, no fill, no border — the same bare-glyph language as `NotificationButton` (§6.13) |
+| Glyph | 21 stroke 2 in `textMuted` (`#FFFFFF` on the `onDark` variant). **Sun** = light · **Moon** = dark · **SunMoon** = auto |
+| Action | Cycles `light → dark → system → light`, and fires `Haptics.selectionAsync()` |
+| a11y | "Appearance: Light. Switch to Dark" — names the current state AND the verb |
+
+**Motion:** press scale → **0.93**, 130 ms ease-out-quad (matches every other
+header button). On every mode change the glyph replays a **rotate −90° → 0° +
+fade in**, 260 ms ease-out-cubic.
+
+> **One glyph can carry three states** because it SHOWS the current one and the
+> tap cycles — the icon is the readout and the control at once. That is what
+> lets it live in a header, where a three-segment track cannot.
+>
+> The swap animation is not decoration: the glyph changes instantly at render,
+> so without it the only feedback for a tap is the whole app changing colour,
+> which is a lot of movement to attribute to one 21px icon.
 
 ---
 
@@ -1204,17 +1248,38 @@ BottomSheet, default max height 86 %.
 
 | # | Block | Spec |
 |---|-------|------|
-| 1 | **Header** | Side padding 20, bottom padding 16, row gap 12. Avatar **44**. Name UI Semibold 15 `text` (1 line). Sub UI Regular 12.5 `textMuted` — `Designation · Department`, falling back to email. Close: **32 × 32** circle, fill `fill`, X 16 `textMuted` |
+| 1 | **Header** | Side padding 20, bottom padding 16, row gap 12. Avatar **44**. Name UI Semibold 15 `text` (1 line). Sub UI Regular 12.5 `textMuted` — `Designation · Department`, falling back to email. **The whole block is pressable → Profile**, with a trailing ChevronRight 17 `textFaint`. Close: **32 × 32** circle, fill `fill`, X 16 `textMuted` |
 | 2 | Divider | 1px `border`, full bleed |
-| 3 | **Menu list** | Side padding 20, padding-y 8, scrollable. Row **h 48**, gap 14: icon 19 stroke 2 in `brand/600` (or `textFaint` when soon) + label UI Medium 15 + trailing ChevronRight 17 `textFaint` — or the word "Soon" UI Regular 11.5 `textFaint`. **No tinted wells, no badges** — eight rows of colored tiles is what made this list feel loud |
-| 4 | Divider | 1px `border` |
-| 5 | **Appearance** | SettingRow **h 48**: label "Appearance" UI Medium 14 `textMuted`; right = segmented control, fill `fill`, radius pill, padding 2. Three segments (padding 10 h / 6 v, gap 16): **Light (Sun) · Dark (Moon) · Auto (SunMoon)**. Active segment = fill `card`, icon `brand/600`, label `text`; inactive = icon+label `textFaint`. Icon 13, label UI Semibold 11.5 |
-| 6 | **Log out** | **h 48**, radius 16, fill `fill`, margin-top 8, centered row gap 8. LogOut 17 `danger/500` + "Log out" UI Semibold 14 `danger/600` |
+| 3 | **Group label** | Caps, `T.micro` `textFaint`, letter-spacing **+0.7**, margin-top 16 (first: 8), margin-bottom 2 |
+| 4 | **Menu row** | **h 44**, gap 14: icon 19 stroke 2 in `brand/600` (or `textFaint` when soon) + label UI Medium 15. Trailing: the word "Soon" UI Regular 11.5 `textFaint`, **or nothing**. **No tinted wells, no badges, no chevrons** |
+| 5 | Divider | 1px `border` |
+| 6 | **Log out** | **h 48**, radius 18, fill `fill`, padding-top 12, centered row gap 8. LogOut 17 `danger/500` + "Log out" UI Semibold 14 `danger/600` |
 | 7 | **Version** | "SHR · Version 1.0.0" UI Regular 11 `textFaint`, centered, margin-top 10 |
 
-**Menu entries (in reach-frequency order):** My Leaves · Attendance · Meeting *(soon)*
-· Calendar *(soon)* · Tickets *(soon)* · Refer & Earn *(soon)* · HR Policy *(soon)*
-· Asset Request *(soon)*.
+> **Grouped, not one flat list.** Thirteen identical rows in a column is a wall —
+> nothing about "Salary" looked different from "Team", so finding either meant
+> reading all thirteen. Four short groups let the eye pick the GROUP first and
+> then scan three or four rows; the label pays for its own height several times.
+>
+> **The chevrons went with the grouping.** Thirteen identical arrows were the
+> only thing in the column with more visual weight than the labels, and in a
+> menu every row navigates — an affordance true of everything marks nothing.
+>
+> **The header is the way in to the profile.** It was the largest thing in the
+> sheet and the only one that did nothing when tapped.
+
+**Groups (order inside each is reach-frequency, not alphabetical):**
+
+| Group | Entries |
+|-------|---------|
+| **My work** | My Leaves (ClipboardList) · Attendance (CalendarDays) · Work Calendar (CalendarDays) · My Performance (Target) |
+| **People** | Chat (MessageSquare) · Team (UsersRound) · Birthdays (Cake) |
+| **Money** | Salary (Receipt) · Referrals (Gift) |
+| **Company** | Tickets (LifeBuoy) · My Assets (Boxes) · HR Policy (FileText) · Meeting (Users) *(soon)* |
+
+> **Appearance no longer lives here** — it moved to Profile (§7.9). A drawer is a
+> place you pass THROUGH on the way to a screen, and it was the only row in it
+> that navigated nowhere.
 
 ---
 
@@ -1257,26 +1322,165 @@ screen makes no request of its own.
 
 | # | Block | Spec |
 |---|-------|------|
-| 1 | **Header** | Padding: top = safe-area + 8, sides 20, bottom 16. Row gap 12. ChevronLeft 24 stroke 2.2 `text` · "Profile" Display **22 / 28** `text` (flex) · Settings gear 21 stroke 2 `textMuted` → opens the AppDrawer |
+| 1 | **Header** | Padding: top = safe-area + 8, sides 20, bottom 16. Row gap 12. ChevronLeft 24 stroke 2.2 `text` · "Profile" Display **22 / 28** `text` (flex) · **`ThemeToggle`** (§6.20) · Settings gear 21 stroke 2 `textMuted` → opens the AppDrawer |
 | 2 | **Identity card** | Full width (screen − 40), **height 132**, radius 20, `shadow/card`, clipped. Fill = linear gradient `brand/600` → `brand/800`, diagonal 0,0 → 1,1. Padding-x 18, contents vertically centered |
 | 3 | **Card decoration** | 3 concentric white arcs, origin cx = **94 %** w / cy = **16 %** h, radii **44 % / 62 % / 82 %** of card width, stroke width **1.2**, opacity **0.18 / 0.14 / 0.10** |
 | 4 | **Card contents** | Row gap 16. Avatar **84** with a **2px `rgba(255,255,255,0.7)` ring**. Text column: name Display **20 / 28** white (1 line) → designation UI Regular 13 `rgba(255,255,255,0.8)` (margin-top 2) → "Emp ID: SHR1234" UI Medium 13 `rgba(255,255,255,0.9)` (margin-top 4), falling back to the email when there is no employee id |
 | 5 | **Row list** | **Flat** — margin-top 16, fill `card`, radius **24**, 1px `border`, **no shadow**, clipped. The gradient card above is the one thing on this screen that sits forward; a shadow under the settings list too made two competing planes out of a page that is really "identity, then a list" |
 | 6 | **Row** | **h 56**, padding-x 16, gap 14. Icon **20 stroke 1.8** in `text` (or `textFaint` when soon) · label UI Medium **15** · trailing ChevronRight 18 `textFaint`, or the word "Soon" UI Regular 11.5 `textFaint`. Pressed → opacity 0.6 |
 | 7 | **Separator** | 1px `border`, inset **left 54** — starts under the label, not the glyph |
-| 8 | **Logout row** | Same geometry. LogOut icon `danger/500` `#EF4444`, label `danger/600` `#DC2626`, chevron `danger/200`. This one is live — it clears the session |
-| 9 | **BottomNav** | active = `more` |
+| 8 | **Logout row** | Its own block, **margin-top 8** — separated from the list, not part of it. Same row geometry. LogOut icon `danger/500` `#EF4444`, label `danger/600` `#DC2626`, chevron `danger/200`. This one is live — it clears the session |
+| 9 | **BottomNav** | active = `profile` |
 
 **Rows, in order:** Personal Information (CircleUserRound) · Bank Details (Landmark)
-· Documents (FileText) · Emergency Contact (UserRoundCog) · Change Password (KeyRound)
-· Privacy Policy (ShieldCheck) — **all "Soon"** — then **Logout** (LogOut, live).
+· Statutory & IDs (BadgeCheck) · Skills (Sparkles) · Emergency Contact (UserRoundCog)
+· Documents (FileText) · Privacy Policy (ShieldCheck) — then **Logout** (LogOut, live).
+
+> **Appearance is the header glyph, not a section.** It lived in the drawer
+> footer (a 24px pill with 11px labels), then here as a full-width `Segmented`
+> with a heading and a hint line — at which point a setting almost nobody opens
+> twice was claiming more of the page than the account rows above it. See §6.20.
+>
+> **Logout is outside the list.** Flush under "Privacy Policy" it read as one
+> more settings row, and it is the only irreversible thing on the screen.
 
 ---
 
-### 7.10 Splash / bootstrap
+### 7.10 Splash / bootstrap (`BootSplash`)
 
-Full screen fill `brand/700` `#15803D`, centered ActivityIndicator in `brand/200` `#BBF7D0`.
-Shown only while the saved session is read from storage.
+`src/components/BootSplash.tsx`. Shown **twice on every cold start, as one
+continuous screen**: while the Outfit fonts load (`App.tsx`) and while the saved
+session is read from storage (`RootNavigator`, `bootstrapped === false`). It used
+to be a flat `brand/700` fill with a bare ActivityIndicator, which was
+indistinguishable from a hang.
+
+| Element | Spec |
+|---------|------|
+| Field | Full-screen linear gradient **`brand/700` → `brand/800` → `brand/900`**, diagonal 0,0 → 1,1 — the attendance hero's language, since that card is the next thing drawn |
+| Depth discs | Two circles at `rgba(255,255,255,0.05)` / `0.04`, `0.9 × w` top-right and `0.8 × w` bottom-left, both bled off-screen |
+| Mark | White **circle 112**, `shadow/floating`, holding `assets/logo.png` at 74 × 74 contain |
+| Pulse rings | **3** circles ⌀112, 1.5px `rgba(255,255,255,0.55)`, behind the disc, expanding to **2.2×** and fading to 0 — this IS the loader |
+| Tagline | "Attendance · Leave · Team" — `T.secondary`, `rgba(255,255,255,0.78)`, letter-spacing **+0.4**, centred, margin-top **96** (clears the widest ring) |
+| Version | `v{expoConfig.version}` — `T.caption`, `rgba(255,255,255,0.45)`, bottom = safe-area + 20 |
+| Status bar | `light` while mounted (the app-wide setting is `dark`, which disappears on this field) |
+
+> **The wordmark is the image, not text.** This renders before the fonts are
+> loaded, so a `<Text>` wordmark would swap family mid-boot. Only the tagline and
+> the version line are type, and both are small enough that the swap is invisible.
+
+> **The pulse is the loader.** No spinner, no bar. Rings leaving the mark keep
+> the eye on the logo; a progress widget parked underneath it would be a second
+> thing to look at, for the same non-information.
+>
+> **Circular, not a squircle.** The logo's own artwork is a ring — a rounded
+> square around it stacked two competing shapes.
+
+**Motion**
+
+| Layer | Spec |
+|-------|------|
+| Cluster entrance (disc + rings) | Fade in, scale **0.86 → 1.0**, **520 ms** ease-out-cubic |
+| Tagline / version | **+140 ms** delay, fade + rise 10 px, **460 ms** ease-out-cubic |
+| Pulse ring | Scale **1 → 2.2**, opacity **0.34 → 0**, **2400 ms** ease-out-quad, infinite. Three rings staggered **800 ms** apart (`RING_MS / RINGS`) so the pulse is continuous, never a burst-then-pause |
+| Disc breath | Scale **1 → 1.04**, **1200 ms** ease-in-out-quad, alternating, starting at **+520 ms** — after the entrance, or the two scales fight and the mark wobbles in |
+
+> The stagger delay wraps the **repeat**, not the timing inside it. Inside, every
+> cycle re-waits and all three rings fire together.
+
+---
+
+### 7.11 Profile edit form (`ProfileEditScreen`)
+
+One spec-driven form behind five rows of §7.9 — Personal Information, Bank
+Details, Statutory & IDs, Skills, Emergency Contact. `PATCH /employees/me`, and
+only the CHANGED paths go on the wire.
+
+**The canvas is inverted.** Page fill is **`card`** (white in light, slate-800 in
+dark) and every field is **`bg`** (white smoke / near-black) with a 1px `border`.
+
+> Every other screen is the other way round. Here the fields have to be the
+> recessed thing, and they can only read that way if the page behind them is the
+> lighter surface. The previous pairing — a `fill`-coloured input on a `bg`
+> canvas of nearly the same value, with a **transparent** border — rendered as
+> text floating on the page rather than as something you type into.
+
+| Element | Spec |
+|---------|------|
+| Group heading | Caps, `T.micro` `textFaint`, letter-spacing **+0.7**, margin-top 8. "Personal Information" is ten fields, split into **How we reach you · About you · Family · Where you live** |
+| Label | `T.label` `textMuted` |
+| Input | h **50** (multiline **96**), radius 18, fill `bg`, 1px border, padding-x 12, leading glyph **17 stroke 2**, text UI Medium **14.5** |
+| Border states | idle `border` → **focused `brand/500`** → **error `danger/500`**. Error outranks focus |
+| Leading glyph | `textFaint` → `brand/600` focused → `danger/500` in error. Phone · Mail · MapPin · Users · Home · UserRound · HeartHandshake · Hash · Landmark · IdCard |
+| Choice (≤3) | Row of equal-width boxes, h 46, radius 16 |
+| Choice (`wrap`) | Wrapping pills, h 46, radius pill, min-width 62, padding-x 12 — **blood group's eight values**, which at 1/8th width each clipped "AB−" |
+| Active choice | Fill `tint.bg`, 1px `brand/600`, label `tint.text` |
+| Hint / error | `T.micro`, margin-top 4. The error **replaces** the hint, never stacks under it |
+| Save bar | Sticky footer, fill `card`, 1px top `border`, padding-top 12 / bottom = safe-area + 12. Label counts the changes: "Save 3 changes" |
+
+**Date of birth** is a `DateField` (§6.15) with `max` = today, not a text box
+asking for `YYYY-MM-DD`.
+
+**Skills** is a chip editor: existing tags as `tint` pills with an X, then one
+"Add another…" input (Sparkles glyph). A comma or Return commits; a half-typed
+value commits on blur; duplicates are rejected case-insensitively. The stored
+shape is unchanged — still a comma-joined string split into an array on save.
+
+> One text box holding `"React Native, Node.js, MongoDB"` meant deleting the
+> middle item was: place a cursor between two commas, backspace exactly the
+> right number of characters, on a phone, over a keyboard covering the field.
+
+**Validation runs on blur, not only on Save** — one `validateField` shared by
+both — and only for a field the user actually changed. Flagging a bad value HR
+put there, the moment the screen opens, is not this form's argument to have.
+
+**Leaving with unsaved edits** opens a `ConfirmSheet` (warning tone): "Leave
+without saving?" / "Yes, discard" · "No, keep editing". Only when `dirty > 0` —
+the form has no auto-save, and a stray back-swipe on a ten-field section used to
+drop the lot silently.
+
+---
+
+### 7.12 Documents (`DocumentsScreen`) + `DocumentPreview`
+
+Read-only list of what HR holds, built off `GET /employees/me`. Statutory IDs and
+`documents[]` are two shapes on the wire and one thing to a person, so they merge
+into one list.
+
+| Element | Spec |
+|---------|------|
+| Row | Padding-y 4, gap 12. Icon well **44 × 44** radius 14 in the verification tone; **ImageIcon for a picture, FileText for everything else** — the glyph says what the tap will open |
+| Title line | `T.cardTitleSm` + the status Badge on the same line (Verified / Pending / On file) |
+| Meta line | `T.micro` `textMuted` — masked number · **extension** · "Added 4 Feb" |
+| Download button | **36 × 36**, radius 12, fill `primary.bg`, Download 16 `brand/600`. Spinner in place of the glyph while fetching, keyed per row |
+| Separator | 1px `border`, inset left 56 |
+| Row tap | Opens the preview. A row with no file behind it is not a Pressable — an affordance that lies |
+
+**`DocumentPreview`** — full-screen Modal on `#0B0F14`.
+
+| Element | Spec |
+|---------|------|
+| Bar | Label UI Semibold 15 white + `EXT · Pinch or double-tap to zoom`, 11.5 white/55. Close **36 × 36** circle `rgba(255,255,255,0.12)` |
+| Image body | Fills the frame, `contain`. **Pinch 1 → 4×, pan once zoomed, double-tap 1 ⇄ 2.5×**; releasing below 1× springs back |
+| Non-image body | 80 × 80 rounded-3xl well, FileText 34, two lines of copy, and an "Open viewer" primary button |
+| Actions | Two buttons, h 48: **Open** (`rgba(255,255,255,0.10)`) and **Download** (`brand/600`, spinner + "Preparing…" while busy) |
+
+> **PDFs open in the in-app browser, images render natively.** Rendering a PDF
+> in-process would mean bundling a WebView or a PDF engine; Chrome Custom Tabs
+> and SFSafariViewController already do it without leaving the app or adding
+> megabytes to the binary.
+>
+> **Download means the share sheet.** The file is pulled into the app cache
+> (`expo-file-system`) and handed to `expo-sharing` — that dialog already holds
+> Save to Files, Drive, WhatsApp and print. A literal "save to Downloads" needs
+> the Storage Access Framework on Android (its own folder picker) and does not
+> exist as a concept on iOS.
+>
+> **Gestures inside a Modal need their own `GestureHandlerRootView`** — the one
+> in `App.tsx` does not reach into the modal's separate view host on Android.
+>
+> **The extension is parsed before the query string.** Signed S3 links carry
+> `?X-Amz-Signature=…`, and a naive `split('.').pop()` classified every document
+> as "other".
 
 ---
 
