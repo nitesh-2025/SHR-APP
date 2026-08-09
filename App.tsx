@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider } from "react-redux";
 
+import { BootSplash } from "./src/components/BootSplash";
 import { Toaster } from "./src/components/Toaster";
 import RootNavigator from "./src/navigation/RootNavigator";
 import { store } from "./src/store";
@@ -31,12 +32,17 @@ export default function App() {
         <ThemeProvider>
           <SafeAreaProvider>
             <StatusBar style="dark" />
+            {/* Same splash on both sides of the font load, so a cold start is
+                ONE continuous screen instead of blank → green → app. Without
+                this the first ~300ms was the bare root view. */}
             {fontsLoaded ? (
               <>
                 <RootNavigator />
                 <Toaster />
               </>
-            ) : null}
+            ) : (
+              <BootSplash />
+            )}
           </SafeAreaProvider>
         </ThemeProvider>
       </Provider>

@@ -1,8 +1,8 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 
+import { BootSplash } from "../components/BootSplash";
 import AssetsScreen from "../screens/AssetsScreen";
 import AttendanceScreen from "../screens/AttendanceScreen";
 import BirthdayScreen from "../screens/BirthdayScreen";
@@ -36,7 +36,6 @@ import {
 } from "../store";
 import { hydrateFromSession } from "../store/authSlice";
 import type { ProfileSection } from "../screens/ProfileEditScreen";
-import { useTheme } from "../theme/ThemeProvider";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -92,7 +91,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const dispatch = useAppDispatch();
-  const { brand } = useTheme();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const bootstrapped = useAppSelector(selectIsBootstrapped);
 
@@ -109,14 +107,7 @@ export default function RootNavigator() {
   // Splash until storage has been read — without this the Login screen flashes
   // for a frame on every cold start of an already-signed-in user.
   if (!bootstrapped) {
-    return (
-      <View
-        style={{ backgroundColor: brand[700] }}
-        className="flex-1 items-center justify-center"
-      >
-        <ActivityIndicator color={brand[200]} />
-      </View>
-    );
+    return <BootSplash />;
   }
 
   return (
