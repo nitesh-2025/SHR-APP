@@ -141,11 +141,11 @@ function CommentBubble({
         <View
           style={{
             backgroundColor: mine ? tint.bg : c.card,
-            borderRadius: radius.well + 2,
+            borderRadius: radius.well,
             // The corner nearest the speaker is squared off, so a run of
             // messages from one person reads as one block.
-            borderBottomRightRadius: mine ? 6 : radius.well + 2,
-            borderBottomLeftRadius: mine ? radius.well + 2 : 6,
+            borderBottomRightRadius: mine ? 6 : radius.well,
+            borderBottomLeftRadius: mine ? radius.well : 6,
             borderWidth: 1,
             borderColor: mine ? tint.border : c.border,
             paddingHorizontal: space.md,
@@ -454,7 +454,7 @@ export default function TicketDetailScreen() {
                 <View
                   style={{
                     backgroundColor: c.card,
-                    borderRadius: radius.card - 4,
+                    borderRadius: radius.card,
                     borderWidth: 1,
                     borderColor: c.border,
                     paddingVertical: space.xxl,

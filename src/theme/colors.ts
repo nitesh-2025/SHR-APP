@@ -113,13 +113,26 @@ export const darkScheme: Scheme = {
 
 /* ── Geometry ────────────────────────────────────────────────────────────── */
 
+/**
+ * One corner, everywhere: **4**.
+ *
+ * The ramp used to run 24 / 18 / 16, which meant a card, the button inside it
+ * and the well inside that each curved differently — three radii stacked within
+ * 40px, and every new surface had to guess which one it belonged to. A single
+ * value removes the guess and reads as deliberate rather than soft.
+ *
+ * The names are kept so call sites still say what they are drawing (and so a
+ * future change to one class of surface has somewhere to land), but they all
+ * resolve to the same number. `pill` is the one exception — a pill is not a
+ * radius, it is a shape, and 999 is how a chip, an avatar and the FAB stay
+ * round.
+ */
 export const radius = {
-  /** Large surfaces. Generous on purpose — it is what reads as "premium". */
-  card: 24,
-  button: 18,
-  input: 18,
+  card: 4,
+  button: 4,
+  input: 4,
   /** Small surfaces: icon wells, inner wells, chips-with-corners. */
-  well: 16,
+  well: 4,
   pill: 999,
 } as const;
 

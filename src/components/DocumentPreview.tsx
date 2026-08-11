@@ -328,7 +328,7 @@ export function DocumentPreview({
           <View className="flex-1 items-center justify-center px-10">
             <View
               style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
-              className="h-20 w-20 items-center justify-center rounded-3xl"
+              className="h-20 w-20 items-center justify-center rounded-[4px]"
             >
               <FileText size={34} strokeWidth={1.6} color="#FFFFFF" />
             </View>

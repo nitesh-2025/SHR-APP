@@ -30,6 +30,19 @@ export const LONG_BREAK_MIN = Number(
 export const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? '';
 
 /**
+ * Public careers page, if the company has one. Empty = not configured.
+ *
+ * Two things depend on it and both degrade honestly without it: the shared
+ * job post appends the link only when there is one, and the LinkedIn button
+ * falls back to the system share sheet — `share-offsite` takes a URL and
+ * nothing else, so with no URL there is nothing to hand it.
+ *
+ * Never guessed. A careers URL is the one line in a shared post a candidate
+ * actually taps, and a 404 on it costs the REFERRER their credibility.
+ */
+export const CAREERS_URL = process.env.EXPO_PUBLIC_CAREERS_URL ?? '';
+
+/**
  * Referral bonus paid on a successful hire, in rupees. `0` = not configured.
  *
  * Config rather than an API call because no recruitment endpoint knows this

@@ -8,14 +8,17 @@ import {
   FileText,
   MessageSquareText,
   PartyPopper,
-  Plus,
+  PenLine,
   Repeat,
   TriangleAlert,
   X,
+  type LucideIcon,
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -33,15 +36,16 @@ import {
   ConfirmSheet,
   ConfirmStat,
 } from "../components/ConfirmSheet";
+import { LeaveApplyForm } from "../components/LeaveApplyForm";
 import { BalanceTile, useBalanceTiles } from "../components/LeaveBalanceCard";
 import {
   Badge,
   EmptyState,
   RangeChip,
   SectionHeader,
-  Segmented,
   Skeleton,
 } from "../components/ui";
+import { ViewMenu, type ViewOption } from "../components/ViewMenu";
 import { describeApiError, toastApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -82,13 +86,19 @@ const TYPE_LABEL: Record<string, string> = {
   unpaid: "Unpaid Leave",
 };
 
-// Rejected reads violet rather than red: red is already the calendar's
-// "absent", and a declined request is not an error state.
+// Both endings of a request that did not happen read RED.
+//
+// Violet for rejected and grey for cancelled was the earlier call — the idea
+// being that a decision is not an error. On the screen it did not survive
+// contact: violet is not a colour this app uses for anything else, so it read
+// as decorative, and grey made a cancelled request look like a disabled row
+// rather than a request that ended. Green happened, amber is waiting, red did
+// not happen. Three colours, one rule.
 const STATUS: Record<LeaveStatus, { label: string; tone: Surface }> = {
   approved: { label: "Approved", tone: surface.success },
   pending: { label: "Pending", tone: surface.warning },
-  rejected: { label: "Rejected", tone: surface.purple },
-  cancelled: { label: "Cancelled", tone: surface.neutral },
+  rejected: { label: "Rejected", tone: surface.danger },
+  cancelled: { label: "Cancelled", tone: surface.danger },
 };
 
 /** `all` is not a status — it is the absence of the filter. */
@@ -106,15 +116,54 @@ const FILTERS: { key: StatusFilter; label: string; tone: Surface | null }[] = [
   { key: "all", label: "All", tone: null },
   { key: "pending", label: "Pending", tone: surface.warning },
   { key: "approved", label: "Approved", tone: surface.success },
-  { key: "rejected", label: "Rejected", tone: surface.purple },
-  { key: "cancelled", label: "Cancelled", tone: surface.neutral },
+  // Same tones the badges carry — a filter dot that does not match the chip it
+  // filters for is a legend that lies.
+  { key: "rejected", label: "Rejected", tone: surface.danger },
+  { key: "cancelled", label: "Cancelled", tone: surface.danger },
 ];
 
 /** Years offered in the picker, newest first. */
 const YEAR_SPAN = 4;
 
-/** The two halves of "leave": what YOU asked for, and what the COMPANY gives. */
-type Tab = "requests" | "holidays";
+/**
+ * Three readings of "leave" on one screen: what you asked for, what the company
+ * already closed, and the form that starts a new request.
+ *
+ * "Apply" used to be a pushed screen behind a floating button. Filing a request
+ * and checking what happened to the last one are the same errand five seconds
+ * apart, and putting a navigation transition between them meant the balance
+ * hero — the number that decides how many days you ask for — was on the page you
+ * had just left.
+ */
+type Tab = "requests" | "holidays" | "apply";
+
+/**
+ * The three views, as menu rows.
+ *
+ * Each carries the sentence that says what it is for — the thing a segmented
+ * strip has no room for, and the reason "Requested" and "Apply" sitting a pixel
+ * apart never explained themselves.
+ */
+const VIEWS: ViewOption<Tab>[] = [
+  {
+    key: "requests",
+    label: "Requested",
+    hint: "What you asked for, and where it got to",
+    icon: ClipboardList,
+  },
+  {
+    key: "holidays",
+    label: "Holidays",
+    hint: "Days the company has already closed",
+    icon: CalendarHeart,
+  },
+  {
+    key: "apply",
+    label: "Apply for leave",
+    hint: "Fill in a new request",
+    icon: PenLine,
+  },
+];
 
 const TILE_WIDTH = 168;
 
@@ -159,7 +208,7 @@ function HolidayCard({
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -169,7 +218,7 @@ function HolidayCard({
       className="flex-row items-center gap-3"
     >
       <View
-        style={{ backgroundColor: well.bg, borderRadius: radius.well - 2 }}
+        style={{ backgroundColor: well.bg, borderRadius: radius.well }}
         className="h-12 w-12 items-center justify-center"
       >
         <Text
@@ -465,8 +514,24 @@ function FilterChip({
   onPress: () => void;
 }) {
   const { c, brand, dark } = useTheme();
+  // Press feedback as STATE, not as a `style` callback. See the note below.
+  const [pressed, setPressed] = useState(false);
+
   const empty = count === 0 && !active;
   const dot = tone ? toneFor(tone, dark).tint : null;
+
+  /**
+   * Explicit inks for both schemes.
+   *
+   * The active chip is a brand fill with white on it in BOTH themes — the fill
+   * is what carries the selection, and `brand/600` clears 4.5:1 against white
+   * either way. The resting chip is the card surface with the scheme's own
+   * text colour, which in dark is white and in light is near-black; hard-coding
+   * either one is how a chip ends up invisible on the other theme.
+   */
+  const fill = active ? brand[600] : c.card;
+  const ink = active ? "#FFFFFF" : c.text;
+  const countInk = active ? "rgba(255,255,255,0.78)" : c.textFaint;
 
   return (
     <Pressable
@@ -474,39 +539,49 @@ function FilterChip({
       accessibilityRole="button"
       accessibilityLabel={`${label}, ${count}`}
       accessibilityState={{ selected: active }}
-      style={({ pressed }) => ({
-        backgroundColor: active ? brand[600] : c.card,
-        borderRadius: radius.pill,
-        borderWidth: active ? 0 : 1,
-        borderColor: c.border,
-        opacity: pressed ? 0.75 : empty ? 0.55 : 1,
-      })}
-      className="h-9 flex-row items-center gap-2 px-3.5"
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      // NO `className`, and no CALLBACK `style` — the same trap `ui.tsx`'s
+      // Button documents. NativeWind rewrites a styled component's JSX, and the
+      // object returned from the callback form is what it can drop: lose it and
+      // the fill, the height and the padding go with it. That is exactly what
+      // happened here — the ACTIVE chip lost its green, leaving white text on a
+      // white card and a filter that looked like it had been deleted.
+      style={[
+        {
+          height: 36,
+          borderRadius: radius.pill,
+          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: fill,
+          borderWidth: active ? 0 : 1,
+          borderColor: c.border,
+          opacity: pressed ? 0.75 : empty ? 0.55 : 1,
+        },
+      ]}
     >
       {dot ? (
         <View
           style={{
+            width: 6,
+            height: 6,
+            borderRadius: radius.pill,
             // On the accent fill the status dot goes white — its own hue
             // against brand green is two saturated colours fighting in a 6px
             // circle, and the chip is already telling you which status it is.
             backgroundColor: active ? "rgba(255,255,255,0.9)" : dot,
           }}
-          className="h-1.5 w-1.5 rounded-full"
         />
       ) : null}
 
-      <Text
-        style={{ color: active ? "#FFFFFF" : c.text }}
-        className={T.badge}
-        allowFontScaling={false}
-      >
+      <Text style={{ color: ink }} className={T.badge} allowFontScaling={false}>
         {label}
       </Text>
 
       <Text
-        style={{
-          color: active ? "rgba(255,255,255,0.75)" : c.textFaint,
-        }}
+        style={{ color: countInk }}
         className={T.count}
         allowFontScaling={false}
       >
@@ -584,7 +659,7 @@ function LeaveCard({
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -596,7 +671,7 @@ function LeaveCard({
           pending from its left edge and the badge only confirms it. */}
       <View className="flex-row items-center gap-3">
         <View
-          style={{ backgroundColor: well.bg, borderRadius: radius.well - 2 }}
+          style={{ backgroundColor: well.bg, borderRadius: radius.well }}
           className="h-12 w-12 items-center justify-center"
         >
           <Text
@@ -642,7 +717,7 @@ function LeaveCard({
       <View
         style={{
           backgroundColor: c.fill,
-          borderRadius: radius.well - 4,
+          borderRadius: radius.well,
           paddingHorizontal: space.md,
           paddingVertical: space.sm + 2,
         }}
@@ -693,7 +768,7 @@ function LeaveCard({
         <View
           style={{
             backgroundColor: well.bg,
-            borderRadius: radius.well - 4,
+            borderRadius: radius.well,
             padding: space.md,
           }}
           className="mt-3 flex-row gap-2"
@@ -920,9 +995,20 @@ export default function LeaveScreen() {
           >
             My Leave
           </Text>
+          {/* The view no longer has a strip of its own, so the title says which
+              one you are on. Without this the header would be the same three
+              words on all three views. */}
+          <Text
+            style={{ color: c.textMuted }}
+            className={T.caption}
+            numberOfLines={1}
+          >
+            {VIEWS.find((v) => v.key === tab)?.label ?? "Requested"}
+          </Text>
         </View>
 
-        {/* Month left of year — narrowing reads outer-to-inner. */}
+        {/* Month left of year — narrowing reads outer-to-inner. Then the view
+            menu, which is the outermost control of the three. */}
         <View className="flex-row items-center gap-2">
           <RangeChip
             label={month === null ? "All" : MONTHS[month]}
@@ -934,52 +1020,81 @@ export default function LeaveScreen() {
             a11y={`Year ${year}. Change year`}
             onPress={() => setYearOpen(true)}
           />
+
+          {/* Three views behind one glyph, rather than a segmented strip.
+              "Requested · Holidays · Apply" across a 360dp screen left each
+              segment ~100px, which is where the labels start truncating and
+              the count pills stop fitting — and it spent a permanent 48px band
+              on a switch most people touch once a visit. */}
+          <ViewMenu<Tab>
+            value={tab}
+            onChange={setTab}
+            options={VIEWS.map((v) => ({
+              ...v,
+              count:
+                v.key === "requests"
+                  ? inPeriod.length
+                  : v.key === "holidays"
+                    ? holidayList.length
+                    : 0,
+            }))}
+            // A request nobody has answered yet is worth seeing without opening
+            // the menu.
+            badge={counts.pending > 0 && tab !== "requests"}
+          />
         </View>
       </View>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────
-          Two readings of the same word. "Requested" is what YOU asked for;
-          "Holidays" is what the company already closed — days you never have
-          to ask for. They were two different screens' worth of question stuck
-          on one list before. */}
-      <View
-        style={{ paddingHorizontal: space.screen, paddingBottom: space.lg }}
+      {/* The apply tab carries a multi-line reason field, so the scroller needs
+          to lift clear of the keyboard. `undefined` on Android — the window
+          already resizes there, and a second avoider double-counts the inset. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Segmented<Tab>
-          segments={[
-            { key: "requests", label: "Requested", count: inPeriod.length },
-            { key: "holidays", label: "Holidays", count: holidayList.length },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
-      </View>
-
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 76,
+          // Clearance for the bar and nothing more. The extra 76 was the
+          // floating button's footprint; with the button gone it was just a
+          // screenful of nothing between the last card and the nav.
+          paddingBottom: insets.bottom + BOTTOM_NAV_CLEARANCE + 16,
         }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={
-              tab === "requests"
-                ? isFetching && !isLoading
-                : holidays.isFetching && !holidays.isLoading
+              tab === "holidays"
+                ? holidays.isFetching && !holidays.isLoading
+                : isFetching && !isLoading
             }
             onRefresh={() => {
-              if (tab === "requests") {
+              if (tab === "holidays") {
+                holidays.refetch();
+              } else {
                 refetch();
                 balance.refetch();
-              } else {
-                holidays.refetch();
               }
             }}
             tintColor={brand[600]}
           />
         }
       >
-        {tab === "holidays" ? (
+        {tab === "apply" ? (
+          /* ── Apply ────────────────────────────────────────────────────
+             The whole form, inline. On submit it hands over to the Requested
+             tab — the question straight after filing is "did it actually go",
+             and the answer is one tab across rather than one screen back. */
+          <View style={{ paddingHorizontal: space.screen }}>
+            <LeaveApplyForm
+              width={width - space.screen * 2}
+              onApplied={() => {
+                setTab("requests");
+                setStatus("all");
+              }}
+            />
+          </View>
+        ) : tab === "holidays" ? (
           /* ── Holidays ─────────────────────────────────────────────────
              Upcoming first, then what has already gone by — the question on
              this tab is "when is the next day off", not "what happened in
@@ -987,9 +1102,9 @@ export default function LeaveScreen() {
           <>
             {holidays.isLoading ? (
               <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-                <Skeleton height={78} radius={radius.card - 4} />
-                <Skeleton height={78} radius={radius.card - 4} />
-                <Skeleton height={78} radius={radius.card - 4} />
+                <Skeleton height={78} radius={radius.card} />
+                <Skeleton height={78} radius={radius.card} />
+                <Skeleton height={78} radius={radius.card} />
               </View>
             ) : holidays.error ? (
               <EmptyState
@@ -1164,9 +1279,9 @@ export default function LeaveScreen() {
 
             {isLoading ? (
               <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-                <Skeleton height={150} radius={radius.card - 4} />
-                <Skeleton height={150} radius={radius.card - 4} />
-                <Skeleton height={150} radius={radius.card - 4} />
+                <Skeleton height={150} radius={radius.card} />
+                <Skeleton height={150} radius={radius.card} />
+                <Skeleton height={150} radius={radius.card} />
               </View>
             ) : error ? (
               <EmptyState
@@ -1207,7 +1322,7 @@ export default function LeaveScreen() {
                 actionLabel={status === "all" ? "Apply for leave" : "Show all"}
                 onAction={
                   status === "all"
-                    ? () => navigation.navigate("LeaveApply")
+                    ? () => setTab("apply")
                     : () => setStatus("all")
                 }
               />
@@ -1250,29 +1365,12 @@ export default function LeaveScreen() {
           </>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* Sticky primary action — the only "apply" affordance on the screen now.
-          A header + button, a FAB and a nav slot were three ways to reach one
-          form. */}
-      <Pressable
-        onPress={() => navigation.navigate("LeaveApply")}
-        accessibilityRole="button"
-        accessibilityLabel="Apply for leave"
-        style={({ pressed }) => ({
-          position: "absolute",
-          right: space.screen,
-          bottom: insets.bottom + BOTTOM_NAV_CLEARANCE,
-          height: 52,
-          backgroundColor: brand[600],
-          borderRadius: radius.pill,
-          transform: [{ scale: pressed ? 0.95 : 1 }],
-          ...shadow.floating,
-        })}
-        className="flex-row items-center gap-2 px-5"
-      >
-        <Plus size={20} strokeWidth={2.4} color="#FFFFFF" />
-        <Text className="font-ui-semibold text-[14.5px] text-white">Leave</Text>
-      </Pressable>
+      {/* No floating button.
+          "Apply" is a row in the header menu now, and a FAB saying the same
+          thing was a second door to one room — one that also cost the list 76px
+          of dead scroll under it so nothing would hide behind the button. */}
 
       {/* No tab of its own — Leave is reached from the rail and the drawer, so
           nothing in the bar should light up while you are here. */}

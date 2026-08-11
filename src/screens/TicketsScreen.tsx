@@ -110,7 +110,7 @@ function TicketRow({ ticket, onPress }: { ticket: TicketItem; onPress: () => voi
       accessibilityHint="Opens the ticket and its replies"
       style={({ pressed }) => ({
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -296,9 +296,9 @@ export default function TicketsScreen() {
       >
         {list.isLoading ? (
           <>
-            <Skeleton height={128} radius={radius.card - 4} />
-            <Skeleton height={128} radius={radius.card - 4} />
-            <Skeleton height={128} radius={radius.card - 4} />
+            <Skeleton height={128} radius={radius.card} />
+            <Skeleton height={128} radius={radius.card} />
+            <Skeleton height={128} radius={radius.card} />
           </>
         ) : list.error ? (
           <EmptyState
@@ -416,7 +416,7 @@ export default function TicketsScreen() {
                       style={({ pressed }) => ({
                         flex: 1,
                         height: 42,
-                        borderRadius: radius.input - 4,
+                        borderRadius: radius.input,
                         backgroundColor: active ? brand[600] : c.fill,
                         opacity: pressed ? 0.8 : 1,
                       })}

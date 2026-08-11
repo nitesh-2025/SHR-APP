@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useGetUnreadCountQuery } from "../store/notificationApi";
-import { danger } from "../theme/colors";
+import { danger, radius } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -63,7 +63,7 @@ export function NotificationButton({
         {
           width: 44,
           height: 44,
-          borderRadius: 14,
+          borderRadius: radius.card,
           // No fill, no border. A boxed bell next to a round avatar read as two
           // unrelated controls; bare, the glyph sits on the canvas and the
           // avatar is the only object in the corner.

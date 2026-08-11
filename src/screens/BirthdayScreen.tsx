@@ -30,6 +30,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar, fullNameOf, personUser } from "../components/Avatar";
 import { BottomSheet } from "../components/BottomSheet";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui";
+import {
+  BIRTHDAY_WINDOW_DAYS,
+  useTodaysBirthdays,
+} from "../hooks/useTodaysBirthdays";
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -43,8 +47,13 @@ import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import { fmtDayShort } from "../utils/date";
 
-/** How far ahead to look. A month is far enough to plan, near enough to care. */
-const WINDOW_DAYS = 30;
+/**
+ * How far ahead to look. A month is far enough to plan, near enough to care.
+ *
+ * Shared with the home screen through `useTodaysBirthdays` — one window means
+ * one request and, more importantly, one set of facts about who is celebrating.
+ */
+const WINDOW_DAYS = BIRTHDAY_WINDOW_DAYS;
 
 /** Ready-made wishes. Picked, not typed — nobody composes prose on a phone. */
 const MESSAGES = [
@@ -202,7 +211,7 @@ function TodayCard({
         position: "relative",
         overflow: "visible",
         backgroundColor: cake.bg,
-        borderRadius: 14,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: cake.border,
         padding: space.lg,
@@ -528,20 +537,17 @@ export default function BirthdayScreen() {
 
   const list = useMemo(() => data ?? [], [data]);
 
-  /** Today is mine when the employee CODE matches — see the doc comment. */
-  const mine = useMemo(
-    () =>
-      list.find(
-        (b) =>
-          b.is_today && me?.employee_id && b.employee_id === me.employee_id,
-      ) ?? null,
-    [list, me],
-  );
-
-  const today = useMemo(
-    () => list.filter((b) => b.is_today && b.employee_id !== me?.employee_id),
-    [list, me],
-  );
+  /**
+   * Whose day it is, decided in ONE place.
+   *
+   * This screen used to match `employee_id` by hand while the home screen used
+   * its own copy of the rule — and the two disagreed, so you could be wished
+   * here and ignored there. `useTodaysBirthdays` is now the only thing that
+   * answers "is this me", for both, off the same cached 30-day window.
+   */
+  const { mine: myBirthday, others: todaysOthers } = useTodaysBirthdays();
+  const mine = myBirthday ?? null;
+  const today = todaysOthers;
   const week = useMemo(
     () => list.filter((b) => !b.is_today && b.days_until <= 7),
     [list],
@@ -630,16 +636,23 @@ export default function BirthdayScreen() {
         {mine ? (
           <View style={{ marginBottom: space.xxl }}>
             <MyBirthdayHero
-              name={me?.first_name?.trim() || fullNameOf(me).split(" ")[0]}
+              // The HR record's name wins: a login called "Super" belongs to a
+              // person their employee record knows by their real name, and this
+              // is the one line in the app that says it back to them.
+              name={
+                mine.name?.trim().split(" ")[0] ||
+                me?.first_name?.trim() ||
+                fullNameOf(me).split(" ")[0]
+              }
             />
           </View>
         ) : null}
 
         {isLoading ? (
           <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-            <Skeleton height={140} radius={radius.card - 4} />
-            <Skeleton height={70} radius={radius.card - 4} />
-            <Skeleton height={70} radius={radius.card - 4} />
+            <Skeleton height={140} radius={radius.card} />
+            <Skeleton height={70} radius={radius.card} />
+            <Skeleton height={70} radius={radius.card} />
           </View>
         ) : error ? (
           <EmptyState

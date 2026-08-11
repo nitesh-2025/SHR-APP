@@ -8,6 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 
+import { radius } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -50,7 +51,7 @@ export function MenuButton({
         {
           width: 44,
           height: 44,
-          borderRadius: 14,
+          borderRadius: radius.card,
           borderWidth: 1,
           borderColor: tint.border,
           // `bg-white` was hardcoded here, which turned the button into a white

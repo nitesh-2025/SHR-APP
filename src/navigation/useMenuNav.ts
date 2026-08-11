@@ -56,10 +56,14 @@ export function useMenuNav(options?: {
           return navigation.navigate("Dashboard");
         case "attendance":
           return navigation.navigate("Attendance");
+        // Both land on My Leave. The apply FORM lives on that screen now (its
+        // own view in the header menu), so a separate "apply" destination would
+        // be a second door into a room you can already see from the first —
+        // and the balance, which decides how many days you ask for, is on the
+        // screen you would have skipped past.
         case "leaves":
-          return navigation.navigate("Leave");
         case "apply":
-          return navigation.navigate("LeaveApply");
+          return navigation.navigate("Leave");
         case "profile":
           return navigation.navigate("Profile");
         case "chat":

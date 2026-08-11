@@ -127,7 +127,10 @@ export default function DashboardScreen() {
             exactly as before. */}
         {birthday ? (
           <BirthdayGreeting
-            name={firstName}
+            // The EMPLOYEE record's name wins on this one line. A login called
+            // "Super" belongs to a person the HR record knows by their real
+            // name, and "Happy birthday, Super" is not a wish anybody wants.
+            name={birthday.name?.trim().split(" ")[0] || firstName}
             dob={birthday.date_of_birth}
             paddingTop={insets.top + space.md}
             right={headerActions}
@@ -160,12 +163,20 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ── Today's attendance (the punch lives here) ─────────────────── */}
-        <AttendanceCard />
-
-        <BirthdayBanner
-          scope="others"
-          onPress={() => navigation.navigate("Birthdays")}
+        {/* ── Today's attendance (the punch lives here) ─────────────────────
+            Today's birthdays ride along the bottom of the same card, behind a
+            hairline. On its own it was a third card wedged between the status
+            block and Quick Actions, and it read as an offcut of whichever one
+            it was nearer. Inside, it is one more thing today happens to
+            contain — and on the 364 other days the slot renders nothing. */}
+        <AttendanceCard
+          footer={
+            <BirthdayBanner
+              scope="others"
+              variant="strip"
+              onPress={() => navigation.navigate("Birthdays")}
+            />
+          }
         />
 
         {/* ── Shortcuts ────────────────────────────────────────────────── */}

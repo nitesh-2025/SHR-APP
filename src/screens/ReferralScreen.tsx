@@ -1,25 +1,28 @@
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
-import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Briefcase,
   Building2,
   Check,
+  ChevronDown,
   ChevronLeft,
   FileText,
+  Camera,
   IndianRupee,
   MapPin,
-  Paperclip,
+  MessageCircle,
+  Users2,
   Search,
   Send,
   Share2,
   UserPlus,
   Users,
   X,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,13 +34,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../components/BottomSheet';
-import { Button, EmptyState, RangeChip, Segmented, Skeleton } from '../components/ui';
-import { REFERRAL_REWARD } from '../config/env';
+import { Button, EmptyState, RangeChip, Skeleton } from '../components/ui';
+import { ViewMenu } from '../components/ViewMenu';
+import { CAREERS_URL, REFERRAL_REWARD } from '../config/env';
 import { describeApiError, toastApiError } from '../lib/apiError';
 import { toast } from '../lib/toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { selectCurrentUser, useAppSelector } from '../store';
-import { useUploadMyFilesMutation } from '../store/employeesApi';
 import {
   useCreateCandidateMutation,
   useGetCandidatesQuery,
@@ -72,14 +75,69 @@ const STAGE_SURFACE: Record<CandidateStage, Surface> = {
   rejected: surface.danger,
 };
 
-/** The backend's field name for an upload — same as chat and tickets use. */
-const UPLOAD_FIELD = 'files';
+/**
+ * A resume arrives as a LINK, not as bytes.
+ *
+ * The form used to open a file picker and upload the CV through
+ * `POST /employees/me/upload`. Two things were wrong with that on a phone: the
+ * CV is almost never ON the phone — it is in the referrer's Drive, or in the
+ * candidate's WhatsApp — and an upload turns a 20-second form into a wait on
+ * mobile data that can fail after everything else is filled in.
+ *
+ * A shared link costs one paste, is what people already have to hand, and stays
+ * current if the candidate updates the document.
+ */
+const LINK_RE = /^https?:\/\/[^\s.]+\.[^\s]{2,}$/i;
 
-/** What the picker will take as a CV. Anything else is a screenshot, not a CV. */
-const RESUME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+/** `drive.google.com/…` → `https://drive.google.com/…`, so a bare paste works. */
+function normaliseLink(raw: string): string {
+  const v = raw.trim();
+  if (!v) return '';
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/**
+ * Where a role can be sent, and what each channel is actually good for.
+ *
+ * Brand colours, not the app's green: these are other people's logos and a row
+ * of identical green discs would say nothing at a glance. Lucide has no brand
+ * marks, so the glyph is generic and the COLOUR does the identifying.
+ */
+const SHARE_CHANNELS: {
+  key: 'whatsapp' | 'linkedin' | 'instagram' | 'more';
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+  bg: string;
+}[] = [
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp',
+    hint: 'Opens with the post already written',
+    icon: MessageCircle,
+    bg: '#25D366',
+  },
+  {
+    key: 'linkedin',
+    label: 'LinkedIn',
+    hint: 'Posts the careers link to your feed',
+    icon: Users2,
+    bg: '#0A66C2',
+  },
+  {
+    key: 'instagram',
+    label: 'Instagram',
+    hint: 'Story or DM, through the share sheet',
+    icon: Camera,
+    bg: '#E1306C',
+  },
+  {
+    key: 'more',
+    label: 'Somewhere else',
+    hint: 'Mail, Telegram, copy — the system sheet',
+    icon: Share2,
+    bg: '#64748B',
+  },
 ];
 
 const nameOfDept = (v: Job['department_id']): string | null => {
@@ -255,7 +313,7 @@ function HowItWorks() {
         marginHorizontal: space.screen,
         marginTop: space.lg,
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -319,6 +377,7 @@ function Field({
   multiline,
   required,
   error,
+  hint,
   autoCapitalize = 'words',
 }: {
   label: string;
@@ -329,6 +388,8 @@ function Field({
   multiline?: boolean;
   required?: boolean;
   error?: string;
+  /** Rendered under the input — replaced by the error when there is one. */
+  hint?: string;
   autoCapitalize?: 'none' | 'words' | 'sentences';
 }) {
   const { c, dark } = useTheme();
@@ -355,10 +416,13 @@ function Field({
           backgroundColor: c.fill,
           borderRadius: radius.input,
           borderWidth: 1,
-          borderColor: error ? bad.tint : 'transparent',
-          paddingHorizontal: space.lg,
+          // A hairline, always — not only in the error state. Fill-on-white is
+          // a box you can only locate by its placeholder text, which is exactly
+          // what a form should not make you do.
+          borderColor: error ? bad.tint : c.border,
+          paddingHorizontal: space.md + 2,
           paddingVertical: multiline ? space.md : 0,
-          minHeight: multiline ? 90 : 50,
+          minHeight: multiline ? 96 : 50,
         }}
         className={multiline ? '' : 'justify-center'}
       >
@@ -377,9 +441,19 @@ function Field({
         />
       </View>
 
+      {/* The error REPLACES the hint rather than stacking under it — two lines
+          of guidance, one contradicting the other, is how a field ends up
+          taller than the input it explains. */}
       {error ? (
         <Text style={{ color: bad.text }} className={`mt-1 ${T.micro}`}>
           {error}
+        </Text>
+      ) : hint ? (
+        <Text
+          style={{ color: c.textFaint }}
+          className={`mt-1 leading-4 ${T.micro}`}
+        >
+          {hint}
         </Text>
       ) : null}
     </View>
@@ -425,7 +499,7 @@ function JobCard({
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -513,7 +587,7 @@ function ReferralCard({ candidate }: { candidate: Candidate }) {
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -600,9 +674,28 @@ export default function ReferralScreen() {
   const [stage, setStage] = useState<CandidateStage | 'all'>('all');
 
   /** The job the referral form is open for. */
+  /**
+   * The role a referral is filed against, and whether the form is open.
+   *
+   * Two pieces of state, not one. The sheet used to BE `referTo`: open it by
+   * choosing a job, close it by clearing the job — which meant the form could
+   * only ever be reached from a job card, and on a day with no open roles there
+   * was no way to refer anybody at all. Now the form opens on its own and the
+   * role is a field inside it.
+   */
   const [referTo, setReferTo] = useState<Job | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', note: '' });
-  const [resume, setResume] = useState<{ url: string; name: string } | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  /** Which job's share sheet is open, by id. */
+  const [shareJobId, setShareJobId] = useState<string | null>(null);
+  /** Whether the in-sheet role list is expanded. */
+  const [rolePick, setRolePick] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    note: '',
+    resume: '',
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const jobs = useGetJobsQuery({ status: 'open', limit: 50 });
@@ -613,7 +706,6 @@ export default function ReferralScreen() {
     { skip: !myCode },
   );
   const [createCandidate, { isLoading: submitting }] = useCreateCandidateMutation();
-  const [uploadFiles, { isLoading: uploading }] = useUploadMyFilesMutation();
 
   const openRoles = useMemo(() => {
     const all = jobs.data?.items ?? [];
@@ -625,6 +717,19 @@ export default function ReferralScreen() {
         .some((v) => String(v).toLowerCase().includes(q)),
     );
   }, [jobs.data, query]);
+
+  /**
+   * The job whose share sheet is open.
+   *
+   * Held as an ID rather than the object: the list re-fetches while the sheet
+   * is up, and a captured object would go stale the moment HR edits the role
+   * out from under it. Looked up against the UNFILTERED list, because the
+   * search box can narrow `openRoles` while the sheet is still open.
+   */
+  const shareJob = useMemo(
+    () => (jobs.data?.items ?? []).find((j) => j._id === shareJobId) ?? null,
+    [jobs.data, shareJobId],
+  );
 
   /**
    * Everyone I referred, verified on the client.
@@ -657,9 +762,17 @@ export default function ReferralScreen() {
     [ownedByMe],
   );
 
-  const shareJob = async (job: Job) => {
+  /**
+   * The post, once — every channel sends the same words.
+   *
+   * The link is only in it when `EXPO_PUBLIC_CAREERS_URL` is configured. An
+   * invented careers URL is worse than none: it is the one line a candidate
+   * would actually tap, and a 404 on it is the referrer's credibility, not
+   * ours.
+   */
+  const messageFor = (job: Job): string => {
     const dept = nameOfDept(job.department_id);
-    const lines = [
+    return [
       `We're hiring: ${job.title}`,
       dept ? `Team: ${dept}` : null,
       job.location ? `Location: ${job.location}` : null,
@@ -671,50 +784,84 @@ export default function ReferralScreen() {
       `Interested? Send me your CV and I'll refer you.${
         me?.first_name ? ` — ${me.first_name}` : ''
       }`,
-    ].filter(Boolean);
+      CAREERS_URL ? '' : null,
+      CAREERS_URL || null,
+    ]
+      .filter((l) => l !== null)
+      .join('\n');
+  };
+
+  /**
+   * Open a channel with the post already written.
+   *
+   * What each one actually supports, which is not the same for the three:
+   *
+   *  · **WhatsApp** takes the text. `whatsapp://send?text=` opens the app's
+   *    contact picker with the message loaded; `wa.me` is the fallback for a
+   *    phone without WhatsApp installed and lands on the same flow in a
+   *    browser.
+   *
+   *  · **LinkedIn** shares a URL, never text — `share-offsite` has no text
+   *    parameter, and there is no deep link that pre-fills the composer. With a
+   *    careers URL configured it posts that; without one there is nothing
+   *    honest to hand it, so it falls back to the system sheet.
+   *
+   *  · **Instagram** has no text-sharing entry point at all — its deep links
+   *    take images and stories. The system sheet is the only route that
+   *    reaches it, and Instagram appears in that sheet.
+   *
+   * So: WhatsApp gets a real deep link, and the other two are routed to the
+   * share sheet rather than being given buttons that quietly do nothing.
+   */
+  const shareTo = async (job: Job, channel: 'whatsapp' | 'linkedin' | 'instagram' | 'more') => {
+    const message = messageFor(job);
+    setShareJobId(null);
+
     try {
-      await Share.share({ message: lines.join('\n') });
+      if (channel === 'whatsapp') {
+        const text = encodeURIComponent(message);
+        const app = `whatsapp://send?text=${text}`;
+        const web = `https://wa.me/?text=${text}`;
+        const ok = await Linking.canOpenURL(app).catch(() => false);
+        await Linking.openURL(ok ? app : web);
+        return;
+      }
+
+      if (channel === 'linkedin' && CAREERS_URL) {
+        await Linking.openURL(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(CAREERS_URL)}`,
+        );
+        return;
+      }
+
+      if (channel === 'instagram') {
+        toast.info('Pick Instagram in the share sheet');
+      }
+
+      await Share.share({ message });
     } catch {
       toast.error('Share nahi ho paya.');
     }
   };
 
-  const openForm = (job: Job) => {
-    setForm({ name: '', phone: '', email: '', note: '' });
-    setResume(null);
+  /** `job` omitted = opened from the header, with the role still to pick. */
+  const openForm = (job?: Job) => {
+    setForm({ name: '', phone: '', email: '', note: '', resume: '' });
     setErrors({});
-    setReferTo(job);
+    setReferTo(job ?? null);
+    // Straight to the list when nothing is chosen yet: the role is the one
+    // field that cannot be typed, and a collapsed picker on an empty form is a
+    // step nobody knows they have to take.
+    setRolePick(!job);
+    setFormOpen(true);
   };
 
-  const pickResume = async () => {
-    try {
-      const picked = await DocumentPicker.getDocumentAsync({
-        type: RESUME_TYPES,
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (picked.canceled) return;
-
-      const file = picked.assets?.[0];
-      if (!file) return;
-
-      const body = new FormData();
-      body.append(UPLOAD_FIELD, {
-        uri: file.uri,
-        name: file.name || 'resume.pdf',
-        type: file.mimeType || 'application/pdf',
-        // RN's FormData takes this shape for a file; the DOM typings do not
-        // describe it, hence the cast.
-      } as unknown as Blob);
-
-      const out = await uploadFiles(body).unwrap();
-      const url = out[0]?.url;
-      if (!url) throw new Error('upload returned nothing');
-
-      setResume({ url, name: file.name || 'Resume' });
-    } catch (e) {
-      toast.error(...toastApiError(e));
-    }
+  const closeForm = () => {
+    // Not while the referral is in flight — a sheet that vanishes mid-send
+    // leaves the referrer with no idea whether it went.
+    if (submitting) return;
+    setFormOpen(false);
+    setRolePick(false);
   };
 
   /**
@@ -731,6 +878,14 @@ export default function ReferralScreen() {
     const phone = form.phone.trim();
     const email = form.email.trim();
 
+    if (!referTo) found.role = 'Pick the role you are referring them for.';
+
+    // Only checked when there is something to check — a resume is optional, but
+    // a link that is not a link is a dead end recruitment cannot open.
+    const link = form.resume.trim();
+    if (link && !LINK_RE.test(normaliseLink(link))) {
+      found.resume = 'That does not look like a link. Paste the full URL.';
+    }
     if (!name) found.name = 'Their name is needed.';
     if (!phone && !email) {
       const message = 'Give at least one — recruitment has to reach them.';
@@ -747,8 +902,6 @@ export default function ReferralScreen() {
   };
 
   const submit = async () => {
-    if (!referTo) return;
-
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length > 0) {
@@ -760,10 +913,13 @@ export default function ReferralScreen() {
     try {
       await createCandidate({
         name,
-        job_id: referTo._id,
+        // Checked by `validate` above — the API has no shape for a referral
+        // without a role, so the form refuses to send one rather than posting
+        // a body the backend will reject.
+        job_id: referTo!._id,
         email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined,
-        resume_url: resume?.url,
+        resume_url: normaliseLink(form.resume) || undefined,
         source: 'referral',
         referred_by: me?._id,
         referrer_name: [me?.first_name, me?.last_name].filter(Boolean).join(' ').trim() || undefined,
@@ -772,9 +928,10 @@ export default function ReferralScreen() {
         referral_note: form.note.trim() || undefined,
       }).unwrap();
 
+      setFormOpen(false);
+      setRolePick(false);
       setReferTo(null);
-      setForm({ name: '', phone: '', email: '', note: '' });
-      setResume(null);
+      setForm({ name: '', phone: '', email: '', note: '', resume: '' });
       setErrors({});
       toast.success(`${name} referred 🎉`);
       // Straight to the tab that now has something new in it — a success toast
@@ -785,7 +942,7 @@ export default function ReferralScreen() {
     }
   };
 
-  const busy = submitting || uploading;
+  const busy = submitting;
 
   return (
     <View style={{ backgroundColor: c.bg }} className="flex-1">
@@ -812,10 +969,12 @@ export default function ReferralScreen() {
           <Text style={{ color: c.text }} className={T.section} numberOfLines={1}>
             Referrals
           </Text>
+          {/* With the strip gone this line is the only thing saying which
+              view you are on, so it names it before it counts it. */}
           <Text style={{ color: c.textMuted }} className={T.caption} numberOfLines={1}>
             {tab === 'roles'
-              ? `${openRoles.length} open ${openRoles.length === 1 ? 'role' : 'roles'}`
-              : `${stats.sent} referred${stats.hired ? ` · ${stats.hired} hired` : ''}`}
+              ? `Open roles · ${openRoles.length}`
+              : `My referrals · ${stats.sent}${stats.hired ? ` · ${stats.hired} hired` : ''}`}
           </Text>
         </View>
 
@@ -826,17 +985,43 @@ export default function ReferralScreen() {
             onPress={() => setStageOpen(true)}
           />
         ) : null}
-      </View>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <View style={{ paddingHorizontal: space.screen, paddingBottom: space.lg }}>
-        <Segmented<Tab>
-          segments={[
-            { key: 'roles', label: 'Open Roles', count: openRoles.length },
-            { key: 'mine', label: 'My Referrals', count: stats.sent },
-          ]}
+        {/* Both views AND the one action, behind a single glyph.
+            The strip below the header carried the views and a green "Refer"
+            button sat up here — three controls competing for a 360dp row, with
+            the button clipping off the right edge. Referring is the thing this
+            screen is FOR, so it is the last row of the same menu rather than a
+            fourth control. */}
+        <ViewMenu<Tab>
           value={tab}
           onChange={setTab}
+          options={[
+            {
+              key: 'roles',
+              label: 'Open roles',
+              hint: 'What the company is hiring for',
+              icon: Briefcase,
+              count: openRoles.length,
+            },
+            {
+              key: 'mine',
+              label: 'My referrals',
+              hint: 'Who you sent, and where they got to',
+              icon: Users,
+              count: stats.sent,
+            },
+          ]}
+          actions={[
+            {
+              key: 'refer',
+              label: 'Refer a candidate',
+              hint: 'Pick a role and send their details',
+              icon: UserPlus,
+              onPress: () => openForm(),
+            },
+          ]}
+          // Somebody of yours is mid-pipeline and you are not looking at them.
+          badge={tab !== 'mine' && stats.inPlay > 0}
         />
       </View>
 
@@ -904,8 +1089,8 @@ export default function ReferralScreen() {
             <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
               {jobs.isLoading ? (
                 <>
-                  <Skeleton height={190} radius={radius.card - 4} />
-                  <Skeleton height={190} radius={radius.card - 4} />
+                  <Skeleton height={190} radius={radius.card} />
+                  <Skeleton height={190} radius={radius.card} />
                 </>
               ) : jobs.error ? (
                 <EmptyState
@@ -933,7 +1118,7 @@ export default function ReferralScreen() {
                     key={j._id}
                     job={j}
                     onRefer={() => openForm(j)}
-                    onShare={() => shareJob(j)}
+                    onShare={() => setShareJobId(j._id)}
                   />
                 ))
               )}
@@ -949,8 +1134,8 @@ export default function ReferralScreen() {
           >
             {candidates.isLoading ? (
               <>
-                <Skeleton height={120} radius={radius.card - 4} />
-                <Skeleton height={120} radius={radius.card - 4} />
+                <Skeleton height={120} radius={radius.card} />
+                <Skeleton height={120} radius={radius.card} />
               </>
             ) : candidates.error ? (
               <EmptyState
@@ -969,8 +1154,10 @@ export default function ReferralScreen() {
                     ? 'Refer someone to an open role and their progress shows up here, stage by stage.'
                     : 'Try another stage, or refer someone new.'
                 }
-                actionLabel={stage === 'all' ? 'See open roles' : 'Show all'}
-                onAction={stage === 'all' ? () => setTab('roles') : () => setStage('all')}
+                actionLabel={stage === 'all' ? 'Refer someone' : 'Show all'}
+                onAction={
+                  stage === 'all' ? () => openForm() : () => setStage('all')
+                }
               />
             ) : (
               mine.map((x) => <ReferralCard key={x._id} candidate={x} />)
@@ -985,8 +1172,8 @@ export default function ReferralScreen() {
           heading depends on. `avoidKeyboard` because a Modal gets none from
           the OS, and without it the last two fields are typed into blind. */}
       <BottomSheet
-        visible={Boolean(referTo)}
-        onClose={() => (busy ? undefined : setReferTo(null))}
+        visible={formOpen}
+        onClose={closeForm}
         maxHeightRatio={0.9}
         avoidKeyboard
       >
@@ -1004,11 +1191,159 @@ export default function ReferralScreen() {
             Refer a candidate
           </Text>
           <Text style={{ color: c.textMuted }} className={`mt-1 ${T.secondary}`}>
-            {referTo?.title}
-            {nameOfDept(referTo?.department_id) ? ` · ${nameOfDept(referTo?.department_id)}` : ''}
+            {referTo
+              ? `${referTo.title}${
+                  nameOfDept(referTo.department_id)
+                    ? ` · ${nameOfDept(referTo.department_id)}`
+                    : ''
+                }`
+              : 'Pick the role, then tell recruitment who they should meet.'}
           </Text>
 
-          <View style={{ marginTop: space.xl, gap: space.lg }}>
+          <View style={{ marginTop: space.lg, gap: space.lg }}>
+            {/* ── Role ─────────────────────────────────────────────────────
+                A field, not a precondition. Opening this form from a job card
+                fills it in; opening it from the header leaves it to be chosen
+                here — and either way the referral goes against a real opening,
+                because the API has nowhere to put one that does not. */}
+            <View>
+              <Text style={{ color: c.textMuted }} className={T.label}>
+                Role <Text style={{ color: surface.danger.tint }}>*</Text>
+              </Text>
+
+              <Pressable
+                onPress={() => setRolePick((v) => !v)}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: rolePick, disabled: busy }}
+                accessibilityLabel={
+                  referTo ? `Role: ${referTo.title}. Change it` : 'Pick a role'
+                }
+                style={({ pressed }) => ({
+                  marginTop: 6,
+                  minHeight: 50,
+                  backgroundColor: c.fill,
+                  borderRadius: radius.input,
+                  borderWidth: 1,
+                  borderColor: errors.role
+                    ? surface.danger.tint
+                    : rolePick
+                      ? brand[600]
+                      : c.border,
+                  paddingHorizontal: space.md + 2,
+                  opacity: pressed || busy ? 0.7 : 1,
+                })}
+                className="flex-row items-center gap-2.5"
+              >
+                <Briefcase
+                  size={17}
+                  strokeWidth={2}
+                  color={referTo ? brand[600] : c.textFaint}
+                />
+                <Text
+                  style={{ color: referTo ? c.text : c.textFaint }}
+                  className={`flex-1 ${T.body}`}
+                  numberOfLines={1}
+                >
+                  {referTo ? referTo.title : 'Choose an open role'}
+                </Text>
+                <ChevronDown
+                  size={18}
+                  strokeWidth={2.2}
+                  color={c.textFaint}
+                  style={{ transform: [{ rotate: rolePick ? '180deg' : '0deg' }] }}
+                />
+              </Pressable>
+
+              {errors.role ? (
+                <Text
+                  style={{ color: surface.danger.tint }}
+                  className={`mt-1 ${T.micro}`}
+                >
+                  {errors.role}
+                </Text>
+              ) : null}
+
+              {rolePick ? (
+                <View
+                  style={{
+                    marginTop: space.xs,
+                    backgroundColor: c.fill,
+                    borderRadius: radius.input,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {openRoles.length === 0 ? (
+                    <Text
+                      style={{ color: c.textMuted, padding: space.lg }}
+                      className={T.micro}
+                    >
+                      Nothing is open right now. A referral has to go against a
+                      live opening — this fills up as soon as HR posts one.
+                    </Text>
+                  ) : (
+                    openRoles.map((j, i) => {
+                      const active = referTo?._id === j._id;
+                      const dept = nameOfDept(j.department_id);
+                      return (
+                        <Pressable
+                          key={j._id}
+                          onPress={() => {
+                            setReferTo(j);
+                            setRolePick(false);
+                            setErrors((e) => {
+                              const next = { ...e };
+                              delete next.role;
+                              return next;
+                            });
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                          accessibilityLabel={j.title}
+                          style={({ pressed }) => ({
+                            paddingHorizontal: space.lg,
+                            paddingVertical: space.md,
+                            backgroundColor: active
+                              ? tint.bg
+                              : pressed
+                                ? c.bg
+                                : 'transparent',
+                            borderTopWidth: i === 0 ? 0 : 1,
+                            borderTopColor: c.border,
+                          })}
+                          className="flex-row items-center gap-2.5"
+                        >
+                          <View className="flex-1">
+                            <Text
+                              style={{ color: active ? tint.text : c.text }}
+                              className={T.cardTitleSm}
+                              numberOfLines={1}
+                            >
+                              {j.title}
+                            </Text>
+                            {dept || j.location ? (
+                              <Text
+                                style={{ color: c.textMuted }}
+                                className={`mt-0.5 ${T.micro}`}
+                                numberOfLines={1}
+                              >
+                                {[dept, j.location].filter(Boolean).join(' · ')}
+                              </Text>
+                            ) : null}
+                          </View>
+                          {active ? (
+                            <Check size={16} strokeWidth={2.6} color={brand[600]} />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+              ) : null}
+            </View>
+
             <Field
               label="Candidate name"
               required
@@ -1037,62 +1372,18 @@ export default function ReferralScreen() {
             />
 
             {/* ── Resume ───────────────────────────────────────────────────
-                Optional, but the single thing that moves a referral fastest —
-                a recruiter with a CV can screen today. */}
-            <View>
-              <Text style={{ color: c.textMuted }} className={T.label}>
-                Resume
-              </Text>
-              <Pressable
-                onPress={uploading ? undefined : pickResume}
-                disabled={uploading}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  resume ? `Resume attached: ${resume.name}. Replace it` : 'Attach a resume'
-                }
-                accessibilityState={{ busy: uploading }}
-                style={({ pressed }) => ({
-                  marginTop: 6,
-                  minHeight: 50,
-                  backgroundColor: resume ? tint.bg : c.fill,
-                  borderRadius: radius.input,
-                  borderWidth: 1,
-                  borderColor: resume ? tint.border : 'transparent',
-                  paddingHorizontal: space.lg,
-                  opacity: pressed || uploading ? 0.7 : 1,
-                })}
-                className="flex-row items-center gap-2.5"
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color={brand[600]} />
-                ) : resume ? (
-                  <Check size={17} strokeWidth={2.6} color={brand[600]} />
-                ) : (
-                  <Paperclip size={17} strokeWidth={2} color={c.textFaint} />
-                )}
-                <Text
-                  style={{ color: resume ? c.text : c.textFaint }}
-                  className={`flex-1 ${T.body}`}
-                  numberOfLines={1}
-                >
-                  {uploading
-                    ? 'Uploading…'
-                    : resume
-                      ? resume.name
-                      : 'Attach a PDF or Word file'}
-                </Text>
-                {resume && !uploading ? (
-                  <Pressable
-                    onPress={() => setResume(null)}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel="Remove the attached resume"
-                  >
-                    <X size={16} strokeWidth={2.4} color={c.textMuted} />
-                  </Pressable>
-                ) : null}
-              </Pressable>
-            </View>
+                A link, not an upload. Optional, but the single thing that moves
+                a referral fastest — a recruiter with a CV can screen today. */}
+            <Field
+              label="Resume link"
+              error={errors.resume}
+              value={form.resume}
+              onChangeText={(v) => setForm((f) => ({ ...f, resume: v }))}
+              placeholder="Paste a Drive / Dropbox link"
+              keyboardType="default"
+              autoCapitalize="none"
+              hint="Set sharing to “anyone with the link” — recruitment cannot request access on your behalf."
+            />
 
             <Field
               label="Why them?"
@@ -1104,11 +1395,6 @@ export default function ReferralScreen() {
             />
           </View>
 
-          <Text style={{ color: c.textFaint }} className={`mt-4 leading-4 ${T.micro}`}>
-            Your name and employee ID go with the referral, so recruitment knows
-            who to credit. You can follow every stage under My Referrals.
-          </Text>
-
           <View style={{ marginTop: space.xl }}>
             <Button
               label="Send referral"
@@ -1118,7 +1404,92 @@ export default function ReferralScreen() {
               onPress={submit}
             />
           </View>
+
+          {/* Under the button, not above it. This is the small print on what
+              pressing it does — read after the commitment is in view, and it
+              stops pushing the button off a keyboard-shortened sheet. */}
+          <Text
+            style={{ color: c.textFaint }}
+            className={`mt-3 text-center leading-4 ${T.micro}`}
+          >
+            Your name and employee ID go with the referral, so recruitment knows
+            who to credit. Follow every stage under My referrals.
+          </Text>
         </ScrollView>
+      </BottomSheet>
+
+      {/* ── Share to ──────────────────────────────────────────────────────
+          Named channels rather than only the system sheet: "share this role"
+          is, in practice, three specific apps, and making someone hunt for
+          WhatsApp in a grid of thirty targets every time is the difference
+          between a role being passed on and not. */}
+      <BottomSheet
+        visible={Boolean(shareJob)}
+        onClose={() => setShareJobId(null)}
+        maxHeightRatio={0.6}
+      >
+        <View style={{ padding: space.screen, gap: space.sm }}>
+          <Text style={{ color: c.text }} className={T.section}>
+            Share this role
+          </Text>
+          <Text
+            style={{ color: c.textMuted }}
+            className={`mb-1 ${T.secondary}`}
+            numberOfLines={2}
+          >
+            {shareJob?.title}
+            {nameOfDept(shareJob?.department_id ?? null)
+              ? ` · ${nameOfDept(shareJob?.department_id ?? null)}`
+              : ''}
+          </Text>
+
+          {SHARE_CHANNELS.map((ch) => (
+            <Pressable
+              key={ch.key}
+              onPress={() => (shareJob ? shareTo(shareJob, ch.key) : undefined)}
+              accessibilityRole="button"
+              accessibilityLabel={`${ch.label}. ${ch.hint}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.md,
+                paddingHorizontal: space.md,
+                paddingVertical: space.md,
+                borderRadius: radius.well,
+                borderWidth: 1,
+                borderColor: c.border,
+              }}
+            >
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: radius.well,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: ch.bg,
+                }}
+              >
+                <ch.icon size={18} strokeWidth={2.2} color="#FFFFFF" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text }} className={T.cardTitleSm}>
+                  {ch.label}
+                </Text>
+                <Text
+                  style={{ color: c.textMuted }}
+                  className={`mt-0.5 ${T.micro}`}
+                  numberOfLines={1}
+                >
+                  {ch.key === 'linkedin' && !CAREERS_URL
+                    ? 'Needs a careers link — opens the share sheet'
+                    : ch.hint}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
       </BottomSheet>
 
       {/* ── Stage filter ─────────────────────────────────────────────────── */}

@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { shadow } from '../theme/colors';
+import { radius, shadow } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 
 const OPEN_MS = 300;
@@ -167,8 +167,8 @@ export function BottomSheet({
               maxHeight: height * maxHeightRatio,
               paddingBottom: insets.bottom + 8,
               backgroundColor: c.card,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
+              borderTopLeftRadius: radius.card,
+              borderTopRightRadius: radius.card,
               ...shadow.sheet,
             },
             panelStyle,

@@ -72,7 +72,7 @@ function DeductionCard({ item }: { item: SalaryDeduction }) {
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -326,8 +326,8 @@ export default function PayslipScreen() {
 
         {deductions.isLoading ? (
           <>
-            <Skeleton height={110} radius={radius.card - 4} />
-            <Skeleton height={110} radius={radius.card - 4} />
+            <Skeleton height={110} radius={radius.card} />
+            <Skeleton height={110} radius={radius.card} />
           </>
         ) : deductions.error ? (
           <EmptyState

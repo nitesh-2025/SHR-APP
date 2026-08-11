@@ -42,7 +42,7 @@ function HolidayRow({ item, todayKey }: { item: HolidayDate; todayKey: string })
       className="flex-row items-center gap-3"
     >
       <View
-        style={{ backgroundColor: well.bg, borderRadius: radius.well - 4 }}
+        style={{ backgroundColor: well.bg, borderRadius: radius.well }}
         className="h-11 w-11 items-center justify-center"
       >
         <Text

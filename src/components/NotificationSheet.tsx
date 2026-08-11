@@ -70,7 +70,7 @@ function Row({
     >
       <View
         style={{ backgroundColor: unread ? tint.bg : c.fill }}
-        className="h-9 w-9 items-center justify-center rounded-xl"
+        className="h-9 w-9 items-center justify-center rounded-[4px]"
       >
         <Icon size={17} strokeWidth={2} color={unread ? brand[600] : c.textFaint} />
       </View>

@@ -156,7 +156,7 @@ function Note({
 
   return (
     <View
-      style={{ backgroundColor: t.bg, borderRadius: radius.well - 4, padding: space.md }}
+      style={{ backgroundColor: t.bg, borderRadius: radius.well, padding: space.md }}
       className="flex-row gap-2.5"
     >
       <View style={{ marginTop: 1 }}>{icon}</View>
@@ -194,7 +194,7 @@ function ReviewCard({
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         overflow: "hidden",
@@ -567,8 +567,8 @@ export default function PerformanceScreen() {
         {reviews.isLoading ? (
           <>
             <Skeleton height={HERO_HEIGHT} radius={radius.card} />
-            <Skeleton height={140} radius={radius.card - 4} />
-            <Skeleton height={140} radius={radius.card - 4} />
+            <Skeleton height={140} radius={radius.card} />
+            <Skeleton height={140} radius={radius.card} />
           </>
         ) : reviews.error ? (
           <EmptyState

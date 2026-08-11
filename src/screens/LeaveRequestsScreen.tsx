@@ -21,14 +21,14 @@ import { fmtDayShort } from '../utils/date';
 
 /* ── Status ───────────────────────────────────────────────────────────────── */
 
-// Rejected reads violet rather than red — the same call the My Leave screen
-// makes, and for the same reason: red already means "absent" elsewhere, and a
-// declined request is a decision, not an error.
+// Red for both endings that are not an approval — the same call the My Leave
+// screen makes, so a manager and the employee reading the same request see the
+// same colour on it. Green happened, amber is waiting, red did not happen.
 const STATUS: Record<LeaveStatus, { label: string; tone: Surface }> = {
   approved: { label: 'Approved', tone: surface.success },
   pending: { label: 'Pending', tone: surface.warning },
-  rejected: { label: 'Rejected', tone: surface.purple },
-  cancelled: { label: 'Cancelled', tone: surface.neutral },
+  rejected: { label: 'Rejected', tone: surface.danger },
+  cancelled: { label: 'Cancelled', tone: surface.danger },
 };
 
 const TYPE_LABEL: Record<LeaveType, string> = {
@@ -69,7 +69,7 @@ function Summary({ items }: { items: Leave[] }) {
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         paddingVertical: space.lg,
@@ -132,7 +132,7 @@ function RequestCard({ item, index }: { item: Leave; index: number }) {
       }
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -143,7 +143,7 @@ function RequestCard({ item, index }: { item: Leave; index: number }) {
         {/* The day count is the headline — it is the number that left the
             balance, and the one worth checking against what you asked for. */}
         <View
-          style={{ backgroundColor: tone.bg, borderRadius: radius.well - 2 }}
+          style={{ backgroundColor: tone.bg, borderRadius: radius.well }}
           className="h-12 w-12 items-center justify-center"
         >
           <Text
@@ -260,10 +260,10 @@ export default function LeaveRequestsScreen() {
       >
         {mine.isLoading ? (
           <>
-            <Skeleton height={92} radius={radius.card - 4} />
-            <Skeleton height={116} radius={radius.card - 4} />
-            <Skeleton height={116} radius={radius.card - 4} />
-            <Skeleton height={116} radius={radius.card - 4} />
+            <Skeleton height={92} radius={radius.card} />
+            <Skeleton height={116} radius={radius.card} />
+            <Skeleton height={116} radius={radius.card} />
+            <Skeleton height={116} radius={radius.card} />
           </>
         ) : mine.error ? (
           <EmptyState

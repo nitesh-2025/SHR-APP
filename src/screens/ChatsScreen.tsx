@@ -49,6 +49,19 @@ function nameOf(u?: ChatUser | null): string {
   );
 }
 
+/**
+ * The department's NAME.
+ *
+ * `department_id` arrives populated on some routes and as a bare id string on
+ * others. An id is not a department to anybody reading a header, so an
+ * unpopulated field resolves to nothing rather than to a hex string.
+ */
+function deptOf(u?: ChatUser | null): string | undefined {
+  const d = u?.department_id;
+  if (!d || typeof d === "string") return undefined;
+  return d.department_name?.trim() || undefined;
+}
+
 /** Today → time, otherwise the date. A chat list is scanned, not read. */
 function whenOf(iso?: string): string {
   if (!iso) return "";
@@ -222,6 +235,7 @@ export default function ChatsScreen() {
       name: nameOf(user),
       photo: user.profile_image ?? null,
       designation: user.designation,
+      department: deptOf(user),
     });
   };
 
@@ -235,6 +249,7 @@ export default function ChatsScreen() {
       name: nameOf(t.partner),
       photo: t.partner?.profile_image ?? null,
       designation: t.partner?.designation,
+      department: deptOf(t.partner),
     });
   };
 

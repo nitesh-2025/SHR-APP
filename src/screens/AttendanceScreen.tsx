@@ -188,7 +188,7 @@ function RegularizationCard({
               style={{
                 width: 44,
                 height: 44,
-                borderRadius: 14,
+                borderRadius: radius.card,
                 backgroundColor: tone.bg,
                 borderWidth: 1,
                 borderColor: tone.border,
@@ -301,7 +301,7 @@ function RegularizationCard({
               style={{
                 marginTop: 14,
                 padding: 10,
-                borderRadius: 14,
+                borderRadius: radius.card,
                 backgroundColor: c.fill,
                 flexDirection: "row",
                 alignItems: "center",
@@ -381,7 +381,7 @@ function RegularizationCard({
                   style={{
                     marginTop: 15,
                     padding: 12,
-                    borderRadius: 15,
+                    borderRadius: radius.card,
                     backgroundColor: tone.bg,
                     borderWidth: 1,
                     borderColor: tone.border,
@@ -592,7 +592,7 @@ function StatCard({
       style={{
         width: STAT_WIDTH,
         backgroundColor: c.card,
-        borderRadius: radius.card - 12,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -600,7 +600,7 @@ function StatCard({
       }}
     >
       <View
-        style={{ backgroundColor: tone.tint, borderRadius: radius.well - 4 }}
+        style={{ backgroundColor: tone.tint, borderRadius: radius.well }}
         className="h-9 w-9 items-center justify-center"
       >
         <Icon size={18} strokeWidth={2.2} color="#FFFFFF" />
@@ -657,7 +657,7 @@ function StatCardInline({
         style={{
           width: 42,
           height: 42,
-          borderRadius: 12,
+          borderRadius: radius.card,
           backgroundColor: tone.tint,
         }}
       >
@@ -747,7 +747,7 @@ function PunchCol({
   return (
     <View className="flex-1 flex-row items-center gap-2.5">
       <View
-        style={{ backgroundColor: well.bg, borderRadius: radius.well - 6 }}
+        style={{ backgroundColor: well.bg, borderRadius: radius.well }}
         className="h-8 w-8 items-center justify-center"
       >
         <Icon size={15} strokeWidth={2.2} color={well.tint} />
@@ -881,7 +881,7 @@ function DayCard({
         {/* ── Head ─────────────────────────────────────────────────────────── */}
         <View className="flex-row items-center gap-3">
           <View
-            style={{ backgroundColor: c.fill, borderRadius: radius.well - 1 }}
+            style={{ backgroundColor: c.fill, borderRadius: radius.well }}
             className="h-12 w-12 items-center justify-center"
           >
             <Text
@@ -947,7 +947,7 @@ function DayCard({
             <View
               style={{
                 backgroundColor: c.fill,
-                borderRadius: radius.well - 4,
+                borderRadius: radius.well,
                 paddingHorizontal: space.md,
                 paddingVertical: space.sm + 2,
               }}
@@ -1322,17 +1322,17 @@ export default function AttendanceScreen() {
                   <Skeleton
                     height={118}
                     width={STAT_WIDTH}
-                    radius={radius.card - 4}
+                    radius={radius.card}
                   />
                   <Skeleton
                     height={118}
                     width={STAT_WIDTH}
-                    radius={radius.card - 4}
+                    radius={radius.card}
                   />
                   <Skeleton
                     height={118}
                     width={STAT_WIDTH}
-                    radius={radius.card - 4}
+                    radius={radius.card}
                   />
                 </>
               ) : (
@@ -1367,9 +1367,9 @@ export default function AttendanceScreen() {
 
             {isLoading ? (
               <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-                <Skeleton height={150} radius={radius.card - 4} />
-                <Skeleton height={150} radius={radius.card - 4} />
-                <Skeleton height={150} radius={radius.card - 4} />
+                <Skeleton height={150} radius={radius.card} />
+                <Skeleton height={150} radius={radius.card} />
+                <Skeleton height={150} radius={radius.card} />
               </View>
             ) : listItems.length === 0 ? (
               <EmptyState
@@ -1529,7 +1529,7 @@ export default function AttendanceScreen() {
                   <View
                     style={{
                       flexDirection: "row",
-                      borderRadius: 14,
+                      borderRadius: radius.card,
                       paddingVertical: 10,
                       marginBottom: 8,
                     }}
@@ -1726,12 +1726,12 @@ export default function AttendanceScreen() {
             >
               {regs.isLoading ? (
                 <>
-                  <Skeleton height={130} radius={radius.card - 4} />
-                  <Skeleton height={130} radius={radius.card - 4} />
-                  <Skeleton height={130} radius={radius.card - 4} />
-                  <Skeleton height={130} radius={radius.card - 4} />
-                  <Skeleton height={130} radius={radius.card - 4} />
-                  <Skeleton height={130} radius={radius.card - 4} />
+                  <Skeleton height={130} radius={radius.card} />
+                  <Skeleton height={130} radius={radius.card} />
+                  <Skeleton height={130} radius={radius.card} />
+                  <Skeleton height={130} radius={radius.card} />
+                  <Skeleton height={130} radius={radius.card} />
+                  <Skeleton height={130} radius={radius.card} />
                 </>
               ) : regs.error ? (
                 <EmptyState

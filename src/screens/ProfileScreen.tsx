@@ -1,4 +1,5 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   BadgeCheck,
@@ -41,6 +42,24 @@ import { danger, radius, shadow, space, toneFor } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import { scoreColor, scoreLabel, scoreSurface } from "../utils/profileScore";
+
+/**
+ * What this build is.
+ *
+ * `expoConfig.version` is the marketing version from app.json; the native
+ * fallbacks cover a standalone binary where the manifest is not embedded. The
+ * build number is worth showing beside it — two releases can share a version
+ * and only the build tells support which one is in someone's hand.
+ */
+const APP_VERSION =
+  Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.0.0";
+
+const BUILD_NUMBER =
+  Constants.nativeBuildVersion ??
+  (Constants.expoConfig?.android?.versionCode != null
+    ? String(Constants.expoConfig.android.versionCode)
+    : Constants.expoConfig?.ios?.buildNumber) ??
+  "";
 
 interface Entry {
   key: string;
@@ -477,6 +496,24 @@ export default function ProfileScreen() {
             last
             onPress={() => dispatch(clearCredentials())}
           />
+        </View>
+
+        {/* The build, at the end of the last list on the last screen.
+            It is the first thing support asks for and the one thing nobody can
+            find — and it belongs here rather than in a row of its own, because
+            it is a footnote, not a destination. */}
+        <View style={{ marginTop: space.xl }} className="items-center">
+          <Text style={{ color: c.textFaint }} className={T.micro}>
+            SHR v{APP_VERSION}
+            {BUILD_NUMBER ? ` (${BUILD_NUMBER})` : ""}
+          </Text>
+          <Text
+            style={{ color: c.textFaint }}
+            className={`mt-0.5 ${T.nano}`}
+            numberOfLines={1}
+          >
+            Made for the team at work
+          </Text>
         </View>
       </ScrollView>
 

@@ -188,7 +188,7 @@ export default function LoginScreen() {
 
   // Focus is shown with a green border + tinted ring. Standard, and it survives
   // on any screen — unlike shadow-only affordances, which vanish in sunlight.
-  const fieldClass = "h-14 flex-row items-center rounded-2xl border bg-white px-4";
+  const fieldClass = "h-14 flex-row items-center rounded-[4px] border bg-white px-4";
   const fieldBorder = (which: "email" | "password") => ({
     borderColor: focused === which ? brand[500] : neutral[200],
   });
@@ -358,7 +358,7 @@ export default function LoginScreen() {
                 backgroundColor: remember ? brand[600] : "#ffffff",
                 borderColor: remember ? brand[600] : neutral[300],
               }}
-              className="h-[22px] w-[22px] items-center justify-center rounded-md border-2"
+              className="h-[22px] w-[22px] items-center justify-center rounded-[4px] border-2"
             >
               {remember ? (
                 <Text
@@ -404,7 +404,7 @@ export default function LoginScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: isLoading, busy: isLoading }}
             style={{ height: 54, backgroundColor: brand[600] }}
-            className={`mt-7 flex-row items-center justify-center gap-2 rounded-2xl ${
+            className={`mt-7 flex-row items-center justify-center gap-2 rounded-[4px] ${
               isLoading ? "opacity-60" : ""
             }`}
           >
@@ -413,7 +413,7 @@ export default function LoginScreen() {
                 Not tappable, so it never steals the press. */}
             <View
               style={{ pointerEvents: "none" }}
-              className="absolute inset-0 overflow-hidden rounded-2xl"
+              className="absolute inset-0 overflow-hidden rounded-[4px]"
             >
               <Animated.View
                 style={[

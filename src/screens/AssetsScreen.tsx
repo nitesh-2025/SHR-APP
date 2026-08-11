@@ -58,7 +58,7 @@ function AssetCard({ asset }: { asset: AssetRow }) {
     <View
       style={{
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         padding: space.lg,
@@ -67,7 +67,7 @@ function AssetCard({ asset }: { asset: AssetRow }) {
     >
       <View className="flex-row items-start gap-3">
         <View
-          style={{ backgroundColor: well.bg, borderRadius: radius.well - 2 }}
+          style={{ backgroundColor: well.bg, borderRadius: radius.well }}
           className="h-11 w-11 items-center justify-center"
         >
           <Boxes size={20} strokeWidth={2} color={well.tint} />
@@ -103,7 +103,7 @@ function AssetCard({ asset }: { asset: AssetRow }) {
       <View
         style={{
           backgroundColor: c.fill,
-          borderRadius: radius.well - 4,
+          borderRadius: radius.well,
           paddingHorizontal: space.md,
           paddingVertical: space.sm + 2,
         }}
@@ -219,8 +219,8 @@ export default function AssetsScreen() {
       >
         {loading ? (
           <>
-            <Skeleton height={150} radius={radius.card - 4} />
-            <Skeleton height={150} radius={radius.card - 4} />
+            <Skeleton height={150} radius={radius.card} />
+            <Skeleton height={150} radius={radius.card} />
           </>
         ) : failed ? (
           <EmptyState

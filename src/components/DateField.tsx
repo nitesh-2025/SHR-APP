@@ -108,11 +108,11 @@ export function DateField({
           borderColor: open ? brand[500] : c.border,
           opacity: pressed ? 0.8 : 1,
         })}
-        className="h-12 flex-row items-center gap-2 rounded-2xl border px-3"
+        className="h-12 flex-row items-center gap-2 rounded-[4px] border px-3"
       >
         <View
           style={{ backgroundColor: tint.bg, borderColor: tint.border }}
-          className="h-7 w-7 items-center justify-center rounded-lg border"
+          className="h-7 w-7 items-center justify-center rounded-[4px] border"
         >
           <CalendarDays size={14} strokeWidth={2.2} color={brand[600]} />
         </View>
@@ -128,7 +128,7 @@ export function DateField({
       {open ? (
         <View
           style={{ backgroundColor: c.card, borderColor: c.border }}
-          className="mt-2 rounded-2xl border p-3"
+          className="mt-2 rounded-[4px] border p-3"
         >
           {/* Nav. The arrows step whatever is on screen — a month, or a page
               of years — so one control serves all three grids. */}

@@ -62,7 +62,7 @@ const ACTIONS: Action[] = [
   {
     key: "apply",
     label: "Leave",
-    hint: "New request",
+    hint: "Balance and requests",
     icon: FileText,
     tone: surface.danger,
   },

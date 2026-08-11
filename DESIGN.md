@@ -221,20 +221,23 @@ Card padding in practice: `space.lg + 2` = **18 px**.
 
 ### 3.2 Corner radii
 
+**One corner, everywhere: 4.** Cards, buttons, inputs, wells, sheets, chat
+bubbles and the bottom sheet's top edge all draw the same radius. `pill` is the
+only other value in the system, and it is a SHAPE rather than a radius.
+
 | Token | px | Applied to |
 |-------|----|-----------|
-| `card` | **24** | Cards, gradient hero, balance tiles, timeline cards |
-| `card − 4` | **20** | Quick-action cards |
-| `button` | **18** | Buttons, back button, logout row |
-| `input` | **18** | Text inputs, type selector |
-| `well + 2` | **18** | KPI tiles (Today's Overview) |
-| `well` | **16** | Icon wells, inner wells, header icon buttons |
-| `well − 4` | **12** | Icon well inside a quick-action card |
-| `pill` | **999** | Badges, chips, progress bars, FAB, grab handle |
-| Bottom sheet top corners | **28** | `borderTopLeftRadius` / `borderTopRightRadius` |
-| Login field | **16** (`rounded-2xl`) | Email / password / submit |
-| Header icon button (bell/menu) | **14** | 44×44 square |
-| Notification icon well | **12** (`rounded-xl`) | 36×36 |
+| `card` · `button` · `input` · `well` | **4** | Every rectangular surface — cards, heroes, buttons, fields, icon wells, sheets, bubbles |
+| `pill` | **999** | Badges, chips, progress bars, FAB, grab handle, avatars, presence dots |
+
+> The ramp used to run **24 / 18 / 16** with arithmetic on top (`card − 4`,
+> `well + 2`, `well − 6`). That put three different curves inside 40px of the
+> same card, and every new surface had to guess which step it belonged to —
+> the guesses drifted, which is how one screen ended up with four radii on it.
+> The token NAMES survive so call sites still say what they are drawing, and so
+> a future change to one class of surface has somewhere to land; they all
+> resolve to 4 today. Circles are the exception and stay circles: avatars, the
+> FAB, presence dots, the send disc, calendar day cells.
 
 ### 3.3 Elevation (Figma effect styles — **light mode only**, dark = none)
 
@@ -1440,20 +1443,66 @@ drop the lot silently.
 
 ---
 
-### 7.12 Documents (`DocumentsScreen`) + `DocumentPreview`
+### 7.12 Documents (`DocumentsScreen`) + `DocumentPreview` + `DocumentUploadSheet`
 
-Read-only list of what HR holds, built off `GET /employees/me`. Statutory IDs and
-`documents[]` are two shapes on the wire and one thing to a person, so they merge
-into one list.
+The list of what HR holds, built off `GET /employees/me`, **plus the one place an
+employee can add to it**. Statutory IDs and `documents[]` are two shapes on the
+wire and one thing to a person, so they merge into one list.
 
 | Element | Spec |
 |---------|------|
-| Row | Padding-y 4, gap 12. Icon well **44 × 44** radius 14 in the verification tone; **ImageIcon for a picture, FileText for everything else** — the glyph says what the tap will open |
-| Title line | `T.cardTitleSm` + the status Badge on the same line (Verified / Pending / On file) |
+| Card | **One card per document**, `card` fill, 1px `border`, radius 4, padding 14, stacked with a 12 gap. No dividers, no shared slab |
+| Thumbnail | **48 × 48** radius 4. An image document renders **its own file**, `cover`; everything else (and any image whose link fails) falls back to the glyph well — `primary` tint, or the success tone once verified |
+| Title line | `T.cardTitleSm` + **the Verified badge only**. Nothing is drawn for an unchecked document |
 | Meta line | `T.micro` `textMuted` — masked number · **extension** · "Added 4 Feb" |
-| Download button | **36 × 36**, radius 12, fill `primary.bg`, Download 16 `brand/600`. Spinner in place of the glyph while fetching, keyed per row |
-| Separator | 1px `border`, inset left 56 |
-| Row tap | Opens the preview. A row with no file behind it is not a Pressable — an affordance that lies |
+| Download button | **36 × 36**, radius 12, fill `primary.bg`, Download 16 `brand/600`. Spinner in place of the glyph while fetching, keyed per card |
+| Card tap | Opens the preview. A card with no file behind it is not a Pressable — an affordance that lies |
+| Add card | Last in the stack: dashed 1px `border`, radius 4, Plus 16 + "Add a document" in `brand/600` — the empty slot after the cards, not a seventh one |
+| Header action | 40 × 40 `brand/600` square, radius 18, Plus 20 white. Hidden while loading, on error, and when the record is locked |
+| Subtitle | "6 on file", and "· 2 verified" **only once something is** |
+
+> **No "Pending" chip, and no `n/m verified` tally.** Every row on a new joiner's
+> screen carried an amber badge and the title said `0/6 verified` — six documents
+> filed correctly, rendered as six problems and a score of zero. Verification is
+> HR's queue, not the employee's task: the row states the fact (it is on file)
+> and marks only the exception (HR has checked it).
+
+**`DocumentUploadSheet`** — `BottomSheet` with `avoidKeyboard`, opened from either
+entry point above.
+
+| Element | Spec |
+|---------|------|
+| Type select | Closed field h **52**, radius 4, `fill` on the sheet's `card` canvas: 32 × 32 tinted well + the chosen label + ChevronDown (180° when open). Open list sits under it — rows h 48, hairline between, tinted row + Check 16 on the selected one. Nine kinds, identity first: Aadhaar · PAN · Photograph · Résumé · Education · Experience letter · Bank proof · Offer letter · Something else |
+| Name field | Only for **Something else** — every other kind names itself. Pre-filled from the filename, never over what was typed |
+| Number field | Optional, only for kinds where a number means anything (Aadhaar, PAN, Education, Bank proof, Something else) |
+| File row | Three sources — **Camera · Gallery · Files** — as equal 1/3 tiles. Once staged: 40 × 40 well, name, size, and a Trash2 to clear |
+| Limits line | `T.micro` `textFaint` — "JPG, PNG, PDF, DOC or DOCX · up to 15 MB" |
+| Submit | Primary `Button`, Upload glyph. Label flips to **Replace document** when it will overwrite |
+
+> **Two calls, in this order.** Bytes go to `POST /employees/me/upload` and come
+> back as a URL; `PATCH /employees/me` then writes the `documents[]` entry that
+> points at it. Never the other way round — a row saved against a failed upload
+> is a document that exists everywhere except on disk.
+>
+> **The whole array is sent, existing entries untouched.** The API replaces
+> `documents[]` rather than merging into it, so every prior entry is passed
+> through with its `_id`, `uploaded_at` and verification flag intact. Re-filing
+> one document must not reset the history of the other five.
+>
+> **Re-uploading replaces an unchecked document, never a verified one.** The
+> common case is a first photo that came out unreadable, and a list holding both
+> copies makes HR guess which is current. A verified row has been checked by a
+> person; a new file is added alongside it and the sheet says so before the
+> camera opens. "Something else" always appends — two unrelated documents can
+> share that type.
+>
+> **Camera images are re-encoded at 0.85, not the composer's 0.7.** This image is
+> an ID somebody in HR has to READ, and 70 % is where the last four digits of an
+> Aadhaar number stop being legible.
+>
+> **A locked record (`is_lock`) hides both entry points** and says why in the
+> footer. Letting someone photograph an ID card and meet a 403 is the worst
+> possible order for that information.
 
 **`DocumentPreview`** — full-screen Modal on `#0B0F14`.
 

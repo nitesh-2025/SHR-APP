@@ -418,17 +418,19 @@ export function Skeleton({
 
 /**
  * Square so the ring family stays centred on the glyph whatever the copy under
- * it does. 152 rather than the old 80 because the ornament, not the glyph, is
- * now the object — the glyph is what sits at the middle of it.
+ * it does. Bigger than the glyph because the ornament, not the glyph, is the
+ * object — but 152 was most of a phone screen spent on a decoration, which left
+ * "Nothing approved here" floating below a large pale doughnut. 124 keeps the
+ * ornament and gives the sentence the room.
  */
-const EMPTY_FIELD = 152;
+const EMPTY_FIELD = 124;
 
 /**
  * Ring radii, and how far each one has faded by the time you reach it. The gaps
  * WIDEN outward (16 then 20), which is what makes the family read as something
  * radiating away rather than as a target with a bullseye in it.
  */
-const EMPTY_RINGS = [27, 43, 63] as const;
+const EMPTY_RINGS = [22, 35, 51] as const;
 const EMPTY_RING_FADE = [1, 0.66, 0.38] as const;
 
 /**
@@ -511,7 +513,7 @@ export function EmptyState({
   const half = EMPTY_FIELD / 2;
 
   return (
-    <Animated.View className="items-center px-10 pt-8" style={block}>
+    <Animated.View className="items-center px-10 pt-6" style={block}>
       <Animated.View
         style={[{ width: EMPTY_FIELD, height: EMPTY_FIELD }, ornament]}
         className="items-center justify-center"
@@ -578,7 +580,7 @@ export function EmptyState({
 
       <Text
         style={{ color: c.text }}
-        className={`mt-2 text-center ${T.cardTitle}`}
+        className={`mt-1 text-center ${T.cardTitle}`}
       >
         {title}
       </Text>
@@ -591,11 +593,16 @@ export function EmptyState({
         </Text>
       ) : null}
       {actionLabel && onAction ? (
+        /* Centred under the copy it answers.
+           `full={false}` makes the button hug its label — and `alignSelf:
+           "flex-start"` with it, which is right in a form footer and wrong
+           here: it parked a green slab against the left edge of a column whose
+           every other line is centred. */
         <Button
           label={actionLabel}
           onPress={onAction}
           full={false}
-          style={{ marginTop: space.xl }}
+          style={{ marginTop: space.lg, alignSelf: "center" }}
         />
       ) : null}
     </Animated.View>

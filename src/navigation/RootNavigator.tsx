@@ -84,6 +84,8 @@ export type RootStackParamList = {
     name?: string;
     photo?: string | null;
     designation?: string;
+    /** Department NAME, already resolved — the header never reads an id. */
+    department?: string;
   };
 };
 

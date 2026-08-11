@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   Easing,
@@ -256,7 +256,18 @@ function Punch({ label, value }: { label: string; value: string }) {
  * this is purely a readout — and it exists on one screen while the punch has to
  * exist on all of them.
  */
-export function AttendanceCard() {
+export function AttendanceCard({
+  footer,
+}: {
+  /**
+   * Rendered inside the card, under the punch row, behind its own hairline.
+   *
+   * A slot rather than a hard-wired block: the card knows about the working
+   * day, not about birthdays, and whatever the home screen wants to hang off
+   * the bottom of it should not become this component's business.
+   */
+  footer?: ReactNode;
+} = {}) {
   const { brand } = useTheme();
   const { data: record, isLoading, error } = useGetMyTodayQuery();
 
@@ -376,6 +387,13 @@ export function AttendanceCard() {
             value={fmtTime(record?.clock_out?.at) ?? "--:--"}
           />
         </View>
+
+        {/* Anything the day needs to say that is not a punch — today's
+            birthdays, right now. It lives INSIDE the card because it is part of
+            the same "here is your day" block; as a card of its own it sat
+            between two heavy blocks and read as an offcut of both. Renders
+            nothing on the days there is nothing to say. */}
+        {footer}
       </LinearGradient>
     </>
   );

@@ -49,12 +49,14 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 import { selectCurrentUser, useAppSelector } from "../store";
 import {
   useGetConversationQuery,
+  useGetThreadsQuery,
   useLazyGetConversationQuery,
   useMarkConversationReadMutation,
   useReactMessageMutation,
   useSendMessageMutation,
   useUploadAttachmentsMutation,
   type Attachment,
+  type ChatUser,
   type Message,
 } from "../store/chatApi";
 import { getSocket } from "../store/socket";
@@ -195,7 +197,7 @@ function Bubble({
         // Uniform corners, no tail. The flare was doing work that side and
         // fill already do, and it cost a joint that Android renders a seam
         // through (the bubble carries elevation, a sibling triangle cannot).
-        borderRadius: 16,
+        borderRadius: radius.card,
         backgroundColor: bg,
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -216,7 +218,7 @@ function Bubble({
               : "rgba(15,23,42,0.05)",
             borderLeftWidth: 3,
             borderLeftColor: brand[600],
-            borderRadius: 8,
+            borderRadius: radius.card,
             paddingHorizontal: space.sm,
             paddingVertical: 6,
             marginBottom: 5,
@@ -250,7 +252,7 @@ function Bubble({
           style={{
             width: 232,
             height: 168,
-            borderRadius: 10,
+            borderRadius: radius.card,
             marginTop: -2,
             marginHorizontal: -4,
             marginBottom: message.content ? 6 : 2,
@@ -397,7 +399,34 @@ export default function ChatScreen() {
   );
   const { isUserOnline } = usePresence();
 
-  const { userId, name, photo, designation } = route.params;
+  const { userId, name, photo, designation, department } = route.params;
+
+  /**
+   * Who this person is, from whichever source actually knows.
+   *
+   * The route params are filled in by whoever pushed this screen — and they
+   * only carry what THAT screen had. A thread opened from the chat list has a
+   * partner whose `department_id` may have arrived unpopulated (a bare id, not
+   * an object), so the header said "Offline" and nothing else about a colleague
+   * you may not recognise by name.
+   *
+   * The thread list is already cached from the Chats screen, so reading the
+   * partner back out of it costs nothing and fills the gap. Params still win
+   * where they have an answer: they came from the row that was actually tapped.
+   */
+  const threads = useGetThreadsQuery();
+  const partnerRecord: ChatUser | undefined = threads.data?.find(
+    (t) => String(t._id) === String(userId),
+  )?.partner;
+
+  const partnerDept = ((): string | undefined => {
+    const d = partnerRecord?.department_id;
+    if (!d || typeof d === "string") return undefined;
+    return d.department_name?.trim() || undefined;
+  })();
+
+  const role = designation?.trim() || partnerRecord?.designation?.trim();
+  const dept = department?.trim() || partnerDept;
 
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -722,17 +751,32 @@ export default function ChatScreen() {
           >
             {name || "Chat"}
           </Text>
+
+          {/* Presence is the volatile line and gets the accent when it changes;
+              who they are is the stable one and sits under it. They used to
+              share a line, so a colleague going online replaced their job title
+              — the two facts were competing for one row. */}
           <Text
             style={{ color: partnerTyping ? brand[600] : c.textMuted }}
             className={T.micro}
             numberOfLines={1}
           >
-            {partnerTyping
-              ? "typing…"
-              : online
-                ? "Online"
-                : designation || "Offline"}
+            {partnerTyping ? "typing…" : online ? "Online" : "Offline"}
           </Text>
+
+          {/* Designation AND department: "Dolly Khan · Offline" says nothing
+              about who you are messaging in a company where two people share a
+              first name. Rendered only when the route actually carried them —
+              an empty line is worse than a shorter header. */}
+          {role || dept ? (
+            <Text
+              style={{ color: c.textFaint }}
+              className={T.nano}
+              numberOfLines={1}
+            >
+              {[role, dept].filter(Boolean).join(" · ")}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -742,42 +786,42 @@ export default function ChatScreen() {
           /* The placeholder is bubble-shaped and alternates sides — a skeleton
              that does not predict the layout is just a grey flash. */
           <View style={{ padding: space.lg, gap: 10 }}>
-            <Skeleton height={40} width="58%" radius={12} />
+            <Skeleton height={40} width="58%" radius={4} />
             <Skeleton
               height={40}
               width="46%"
-              radius={12}
+              radius={4}
               style={{ alignSelf: "flex-end" }}
             />
-            <Skeleton height={62} width="72%" radius={12} />
+            <Skeleton height={62} width="72%" radius={4} />
             <Skeleton
               height={40}
               width="38%"
-              radius={12}
+              radius={4}
               style={{ alignSelf: "flex-end" }}
             />
-            <Skeleton height={40} width="58%" radius={12} />
+            <Skeleton height={40} width="58%" radius={4} />
             <Skeleton
               height={40}
               width="46%"
-              radius={12}
+              radius={4}
               style={{ alignSelf: "flex-end" }}
             />
-            <Skeleton height={62} width="72%" radius={12} />
+            <Skeleton height={62} width="72%" radius={4} />
             <Skeleton
               height={40}
               width="38%"
-              radius={12}
+              radius={4}
               style={{ alignSelf: "flex-end" }}
             />
-            <Skeleton height={40} width="58%" radius={12} />
+            <Skeleton height={40} width="58%" radius={4} />
             <Skeleton
               height={40}
               width="46%"
-              radius={12}
+              radius={4}
               style={{ alignSelf: "flex-end" }}
             />
-            <Skeleton height={62} width="72%" radius={12} />
+            <Skeleton height={62} width="72%" radius={4} />
           </View>
         ) : error ? (
           <EmptyState
@@ -806,6 +850,21 @@ export default function ChatScreen() {
               paddingHorizontal: space.lg,
               paddingTop: space.sm,
               paddingBottom: space.lg,
+              // A short thread starts at the TOP.
+              //
+              // The list is `inverted` — it is drawn upside down so that new
+              // messages arrive at the bottom without any scrolling maths. The
+              // side effect is that a thread with three messages in it hangs
+              // off the bottom of the screen with half a page of empty canvas
+              // above it, which reads as a loading state that never finished.
+              //
+              // Inside a flipped container `flex-end` IS the visual top, so
+              // this pins short content up there and leaves the empty space
+              // below it. Once the thread is longer than the viewport,
+              // `flexGrow` has nothing left to grow into and the list behaves
+              // exactly as before.
+              flexGrow: 1,
+              justifyContent: "flex-end",
             }}
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
@@ -875,7 +934,7 @@ export default function ChatScreen() {
             <View
               style={{
                 backgroundColor: theirBubble,
-                borderRadius: 16,
+                borderRadius: radius.card,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 ...(dark ? shadow.none : shadow.soft),
@@ -903,13 +962,19 @@ export default function ChatScreen() {
         <Animated.View
           style={[
             {
-              paddingHorizontal: space.sm + 2,
-              paddingTop: space.sm,
-              // The composer sits ON the canvas, not on a bar of its own: one
-              // white pill floating on the chat surface is the shape everyone
-              // already knows, and it keeps the bar from competing with the
-              // header for "which strip is chrome".
-              backgroundColor: canvas,
+              paddingHorizontal: space.md,
+              paddingTop: space.md,
+              // A bar, matching the header at the other end of the screen.
+              //
+              // It used to be a white pill floating on the tinted canvas, which
+              // left a strip of green between the pill and the screen edge and
+              // made the bottom of the app read as unfinished next to the solid
+              // header. Chrome at both ends now: same fill, same hairline, same
+              // soft lift — the conversation is the only thing on the canvas.
+              backgroundColor: c.card,
+              borderTopWidth: 1,
+              borderTopColor: c.border,
+              ...(dark ? shadow.none : shadow.soft),
             },
             composerPadStyle,
           ]}
@@ -922,10 +987,9 @@ export default function ChatScreen() {
             <View
               style={{
                 marginBottom: space.xs + 2,
-                backgroundColor: c.card,
+                backgroundColor: c.fill,
                 borderRadius: radius.well,
                 padding: space.sm,
-                ...(dark ? shadow.none : shadow.soft),
               }}
               className="flex-row items-center gap-3"
             >
@@ -934,7 +998,7 @@ export default function ChatScreen() {
                 style={{
                   width: 52,
                   height: 52,
-                  borderRadius: radius.well - 6,
+                  borderRadius: radius.well,
                   backgroundColor: c.fill,
                 }}
                 resizeMode="cover"
@@ -969,19 +1033,18 @@ export default function ChatScreen() {
             </View>
           ) : null}
 
-          {/* The reply preview is the same white as the pill below it and sits
+          {/* The reply preview is the same surface as the pill below it and sits
               flush on top — one composer, two rows, not a floating card. */}
           {replyTo ? (
             <View
               style={{
                 marginBottom: space.xs + 2,
-                backgroundColor: c.card,
-                borderRadius: radius.well - 4,
+                backgroundColor: c.fill,
+                borderRadius: radius.well,
                 borderLeftWidth: 3,
                 borderLeftColor: brand[600],
                 paddingHorizontal: space.md,
                 paddingVertical: space.sm,
-                ...(dark ? shadow.none : shadow.soft),
               }}
               className="flex-row items-center gap-2"
             >
@@ -1017,15 +1080,20 @@ export default function ChatScreen() {
             <View
               style={{
                 flex: 1,
-                backgroundColor: c.card,
-                borderRadius: 26,
+                // Recessed against the bar, not raised off the canvas. On a
+                // white bar a white pill with a soft shadow is a shape you can
+                // only see by its shadow; `fill` + a hairline is the same field
+                // treatment every other form in the app uses.
+                backgroundColor: c.fill,
+                borderWidth: 1,
+                borderColor: c.border,
+                borderRadius: radius.card,
                 paddingLeft: 5,
                 paddingRight: space.md,
                 minHeight: 48,
                 // Grows with the text, then stops — a composer that can eat the
                 // whole screen hides the conversation it belongs to.
                 maxHeight: 132,
-                ...(dark ? shadow.none : shadow.soft),
               }}
               className="flex-row items-center gap-2"
             >

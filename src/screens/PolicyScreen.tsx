@@ -3,6 +3,7 @@ import {
   useRoute,
   type RouteProp,
 } from "@react-navigation/native";
+import Constants from "expo-constants";
 import {
   ChevronDown,
   ChevronUp,
@@ -23,6 +24,10 @@ import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 
 export type PolicyKind = "hr" | "privacy";
+
+/** The build this policy shipped in — printed under it, see the footer. */
+const APP_VERSION =
+  Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.0.0";
 
 interface Section {
   title: string;
@@ -83,35 +88,116 @@ const HR_SECTIONS: Section[] = [
   },
 ];
 
+/**
+ * Effective date of the privacy copy below.
+ *
+ * Stated, not implied: a policy with no date cannot be shown to have been in
+ * force when a given piece of data was collected, and Play's data-safety review
+ * asks for one. Bump this whenever the sections underneath change in substance.
+ */
+export const PRIVACY_EFFECTIVE = "12 August 2026";
+
+/**
+ * The app's privacy policy, in full.
+ *
+ * Written against the Google Play User Data policy, which wants a policy that
+ * (a) names the data types collected, (b) states the purpose of each, (c) says
+ * who it is shared with, (d) describes retention and deletion, and (e) gives a
+ * way to reach a human. Each of those is a section below, in the order a
+ * reviewer looks for them.
+ *
+ * Two things this copy deliberately does NOT do: claim a certification nobody
+ * has audited, and promise a retention period the backend does not enforce. An
+ * overstated policy is worse than a plain one — it is the version that gets
+ * quoted back at you.
+ */
 const PRIVACY_SECTIONS: Section[] = [
   {
-    title: "What this app collects",
+    title: "Who this app is for",
     body: [
-      "Your employee profile as HR holds it: name, contact details, department, designation and the documents uploaded against your record.",
-      "Attendance events — the time of each punch, and the device it came from.",
-      "Location, but only at the moment you punch, and only to confirm the punch happened where it was meant to. The app does not track you between punches and does not run location in the background.",
+      "SHR is a workplace app, issued by your employer to its own staff. You can only sign in with an account HR has created — there is no public sign-up.",
+      "Your employer decides what is held about you and why; in data-protection terms they are the controller. This app is the tool that collects it on their behalf and shows it back to you.",
+      "It is not directed at children and is not intended for anyone below the legal working age. We do not knowingly collect data from children.",
+      "Effective from " + PRIVACY_EFFECTIVE + ". Where your signed employment contract or your local law says something different, that takes precedence over this page.",
     ],
   },
   {
-    title: "What it does not collect",
+    title: "Data the app collects",
     body: [
-      "Your photos, contacts, messages or files. Photo access is used only for the picture you deliberately attach.",
-      "Anything at all while you are logged out.",
+      "Identity and profile — name, employee ID, work and personal email, phone, date of birth, gender, marital status, blood group, address, family and emergency contacts, photograph, designation, department and joining date.",
+      "Employment and payroll — shift, leave balances, the salary components and deductions shown on your payslip, and your bank and statutory numbers (PAN, Aadhaar, UAN, PF, ESIC) where you or HR have entered them.",
+      "Documents — files you or HR upload against your record: ID proofs, certificates, letters, and the file type and upload date alongside them.",
+      "Attendance and location — the time of every punch, break and punch-out, and a location captured AT THE MOMENT of a punch to confirm it happened where it was meant to.",
+      "Messages — chat you send colleagues inside the app, and any photo you attach to it.",
+      "Device and technical data — device model, OS version, app version, the device class you signed in from, and error diagnostics.",
+      "That is the whole list. If a screen ever asks for something not named here, treat it as a bug and report it.",
     ],
   },
   {
-    title: "Where it goes",
+    title: "Why each piece is collected",
     body: [
-      "To your employer's own HR backend, over an encrypted connection. It is not sold, and it is not shared with advertisers.",
-      "Your session token is stored in the device keystore, not in plain storage, and is cleared on logout.",
+      "To run the employment relationship: attendance, leave, payroll, assets, performance and HR records. That is the app's only purpose.",
+      "To keep your account secure — the device class and sign-in history are what let a login that should not be happening be spotted.",
+      "To let colleagues reach each other: the directory, chat, and the birthday list.",
+      "To fix faults: crash and error diagnostics, read in aggregate.",
+      "Nothing here is used for advertising, for profiling you outside work, or to build a profile that is sold on. There is no advertising SDK in this app.",
     ],
   },
   {
-    title: "Your rights",
+    title: "Permissions, and what refusing costs",
     body: [
-      "You can view what is held about you from Profile, and correct most of it yourself.",
-      "For anything you cannot edit — statutory numbers, salary, documents — raise a ticket to HR.",
-      "On leaving the company your access ends immediately; the record is retained for the period the law requires.",
+      "Location — requested only when you punch in or out, and read only at that instant. There is no background location: the app cannot follow you between punches. Refuse it and punches record without a location, which your employer's policy may then require a manager to regularise.",
+      "Camera — used when you photograph a document or take a picture to send in a chat. Nothing is captured unless you press the shutter.",
+      "Photos and files — used only for the one file you pick. The app does not scan, index or upload your gallery.",
+      "Notifications — used for attendance reminders, leave decisions, tickets and messages. Refusing costs you those alerts and nothing else.",
+      "Biometrics — optional, and only to unlock the app on this device. Your fingerprint or face never leaves the device and is never sent anywhere; the app receives a yes or no from the operating system, nothing more.",
+      "Every one of these can be revoked in your device settings at any time, and the app keeps working with the matching feature switched off.",
+    ],
+  },
+  {
+    title: "Who can see it",
+    body: [
+      "You — your own record, from the Profile screen.",
+      "Your employer's authorised staff: HR, your reporting manager and administrators, each limited by their role. Access is permission-controlled, not open to everyone with a login.",
+      "Service providers who run the system on your employer's behalf — application hosting, database, file storage and push-notification delivery — under contract, and only to provide that service.",
+      "A public authority, where a valid legal order requires it.",
+      "It is never sold, rented or shared with advertisers or data brokers. There is no third-party analytics or ad network in this app.",
+    ],
+  },
+  {
+    title: "How it is protected",
+    body: [
+      "Everything travels over an encrypted HTTPS connection. Files live in access-controlled storage, not on a public URL anyone could guess.",
+      "Your session token is held in the device's secure keystore — Keychain on iOS, Keystore on Android — never in plain app storage, and it is destroyed on logout.",
+      "Access inside the company is role-based, and administrative actions are written to an audit log.",
+      "ID numbers are shown part-masked in the app, so a screenshot or a glance over your shoulder does not expose them in full.",
+      "No system is perfectly secure. If you think your account has been compromised, tell HR or IT immediately so the session can be revoked.",
+    ],
+  },
+  {
+    title: "How long it is kept",
+    body: [
+      "Attendance, leave and payroll records are kept for as long as employment, tax and labour law require your employer to keep them — typically some years after you leave.",
+      "Chat messages and uploaded documents stay until your employer deletes them under its own retention schedule.",
+      "Your login stops working the day your employment ends; the underlying record is retained for the statutory period, then deleted or anonymised.",
+      "Diagnostics are short-lived and stop being tied to you once aggregated.",
+    ],
+  },
+  {
+    title: "Your rights, and how to use them",
+    body: [
+      "See what is held: open Profile — personal details, bank, statutory numbers, documents, attendance and payslips are all readable there.",
+      "Correct it: most personal fields are editable from Profile. Anything HR owns — designation, salary, statutory numbers, verified documents — is corrected by raising a ticket.",
+      "Ask for deletion: because this is an employment record, deletion is your employer's decision and is limited by the law that requires the record to exist. Requests go to HR, and you are entitled to an answer.",
+      "Withdraw a permission: device settings, any time, without asking anyone.",
+      "Complain: to HR first, and to your local data-protection authority if the answer does not satisfy you.",
+    ],
+  },
+  {
+    title: "Changes and contact",
+    body: [
+      "If this policy changes in substance, the new version appears here with a new effective date on the next app update.",
+      "Questions, corrections or a data request: raise a ticket from Support inside the app, or write to your HR team directly. A privacy question is not a nuisance — it is the point of this page.",
     ],
   },
 ];
@@ -131,7 +217,7 @@ const CONTENT: Record<
     title: "Privacy Policy",
     subtitle: "What this app knows about you",
     intro:
-      "Written for the app specifically, not the company at large. If something here does not match what you were told, say so — that is a bug worth reporting.",
+      "This is the app's own policy: what it collects, why, who sees it, how long it is kept, and how to get it corrected. It covers SHR specifically, not everything your employer holds on paper. If something here does not match what you were told, say so — that is a bug worth reporting.",
     sections: PRIVACY_SECTIONS,
   },
 };
@@ -262,6 +348,18 @@ export default function PolicyScreen() {
           onPress={() => go("tickets")}
           style={{ marginTop: space.sm }}
         />
+
+        {/* Which policy you actually read, and which build it shipped in.
+            A privacy policy that cannot be pinned to a date and a version is
+            not much use in the argument it exists for. */}
+        <Text
+          style={{ color: c.textFaint }}
+          className={`mt-2 text-center ${T.micro}`}
+        >
+          {kind === "privacy"
+            ? `Effective ${PRIVACY_EFFECTIVE} · SHR v${APP_VERSION}`
+            : `SHR v${APP_VERSION}`}
+        </Text>
       </ScrollView>
 
       <BottomNav active={null} onSelect={go} />

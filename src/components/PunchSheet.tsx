@@ -121,7 +121,7 @@ function ActionRow({ row, disabled }: { row: Row; disabled: boolean }) {
       <View
         style={{
           backgroundColor: row.tone.tint,
-          borderRadius: radius.well - 4,
+          borderRadius: radius.well,
         }}
         className="h-10 w-10 items-center justify-center"
       >

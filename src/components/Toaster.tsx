@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dismiss, useToasts, type ToastItem, type ToastKind } from '../lib/toast';
 import { toastBadgeInk, toastPalette } from '../lib/toastTheme';
+import { radius } from "../theme/colors";
 
 /** Fraction of screen width a swipe must cross to count as a dismiss. */
 const SWIPE_RATIO = 0.26;
@@ -222,7 +223,7 @@ function ToastRow({ item }: { item: ToastItem }) {
             // A 20px radius against a 60px-tall card is the proportion every
             // current mobile toast lands on — Sonner, react-hot-toast, the iOS
             // system banner. At 16 the card read as a dialog fragment.
-            borderRadius: 20,
+            borderRadius: radius.card,
             shadowColor: palette.shadow,
             shadowOpacity: palette.shadowOpacity,
             shadowRadius: 24,

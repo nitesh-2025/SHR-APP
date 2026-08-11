@@ -125,7 +125,7 @@ function PersonRow({
       accessibilityHint="Opens contact details"
       style={({ pressed }) => ({
         backgroundColor: c.card,
-        borderRadius: radius.card - 4,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
         paddingHorizontal: space.lg,
@@ -500,7 +500,7 @@ export default function TeamScreen() {
               marginHorizontal: space.screen,
               marginTop: space.lg,
               backgroundColor: cake.bg,
-              borderRadius: radius.card - 4,
+              borderRadius: radius.card,
               borderWidth: 1,
               borderColor: cake.border,
               padding: space.md,
@@ -555,7 +555,7 @@ export default function TeamScreen() {
                 accessibilityLabel={`Manager ${manager.name ?? ""}`}
                 style={({ pressed }) => ({
                   backgroundColor: c.card,
-                  borderRadius: radius.card - 4,
+                  borderRadius: radius.card,
                   borderWidth: 1,
                   borderColor: tint.border,
                   padding: space.lg,
@@ -618,10 +618,10 @@ export default function TeamScreen() {
           >
             {loading ? (
               <>
-                <Skeleton height={74} radius={radius.card - 4} />
-                <Skeleton height={74} radius={radius.card - 4} />
-                <Skeleton height={74} radius={radius.card - 4} />
-                <Skeleton height={74} radius={radius.card - 4} />
+                <Skeleton height={74} radius={radius.card} />
+                <Skeleton height={74} radius={radius.card} />
+                <Skeleton height={74} radius={radius.card} />
+                <Skeleton height={74} radius={radius.card} />
               </>
             ) : !departmentId ? (
               <EmptyState
@@ -772,6 +772,10 @@ export default function TeamScreen() {
                     name: target.name,
                     photo: target.profile_image ?? null,
                     designation: target.designation,
+                    // Everyone on this screen is in the signed-in employee's
+                    // own department, so the name is already on hand — the chat
+                    // header should not have to go and fetch it.
+                    department: departmentName,
                   });
                 }}
               />

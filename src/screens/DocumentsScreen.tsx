@@ -4,11 +4,14 @@ import {
   Download,
   FileText,
   Image as ImageIcon,
+  Lock,
+  Plus,
   TriangleAlert,
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,6 +27,7 @@ import {
   extensionOf,
   isImageUrl,
 } from "../components/DocumentPreview";
+import { DocumentUploadSheet } from "../components/DocumentUploadSheet";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
@@ -33,7 +37,14 @@ import {
   useGetMyProfileQuery,
   type EmployeeDocType,
 } from "../store/employeesApi";
-import { radius, shadow, space, surface, toneFor } from "../theme/colors";
+import {
+  radius,
+  shadow,
+  space,
+  surface,
+  toneFor,
+  type Surface,
+} from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import { fmtDayShort } from "../utils/date";
@@ -85,6 +96,47 @@ function mask(value?: string): string | undefined {
   return `•••• ${v.slice(-4)}`;
 }
 
+/**
+ * The 48px square at the left of a card.
+ *
+ * For an image document it is the document — a scan of a PAN card and a scan of
+ * a marksheet are the same FileText glyph otherwise, and "which one is this"
+ * then costs a full-screen preview to answer. Anything that is not an image, or
+ * an image whose link has expired, falls back to the glyph: a broken-image box
+ * says nothing except that something is wrong.
+ */
+function Thumb({ row, tone }: { row: Row; tone: Surface }) {
+  const [failed, setFailed] = useState(false);
+  const image = Boolean(row.url) && isImageUrl(row.url!) && !failed;
+  const Glyph = row.url && isImageUrl(row.url) ? ImageIcon : FileText;
+
+  if (image) {
+    return (
+      <Image
+        source={{ uri: row.url }}
+        onError={() => setFailed(true)}
+        resizeMode="cover"
+        style={{
+          height: 48,
+          width: 48,
+          borderRadius: 4,
+          backgroundColor: tone.bg,
+        }}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
+
+  return (
+    <View
+      style={{ backgroundColor: tone.bg, borderRadius: 4 }}
+      className="h-12 w-12 items-center justify-center"
+    >
+      <Glyph size={20} strokeWidth={2} color={tone.tint} />
+    </View>
+  );
+}
+
 function DocRow({
   row,
   onPreview,
@@ -97,28 +149,16 @@ function DocRow({
   downloading: boolean;
 }) {
   const { c, dark, brand, tint } = useTheme();
-  const tone = toneFor(
-    row.verified === true
-      ? surface.success
-      : row.verified === false
-        ? surface.warning
-        : surface.neutral,
-    dark,
-  );
+  // Verified is the only state the well colours for. Amber on every unchecked
+  // row painted the whole list as a problem, when "HR has not got to it yet" is
+  // the normal state of a document on the day it is uploaded.
+  const tone = row.verified === true ? toneFor(surface.success, dark) : tint;
 
-  // The glyph says what will happen when the row is tapped: a photo opens as a
-  // picture, everything else opens as a document. Same well, different promise.
-  const Glyph = row.url && isImageUrl(row.url) ? ImageIcon : FileText;
   const ext = row.url ? extensionOf(row.url).toUpperCase() : "";
 
   const body = (
     <View className="flex-row items-center gap-3">
-      <View
-        style={{ backgroundColor: tone.bg, borderRadius: radius.well - 2 }}
-        className="h-11 w-11 items-center justify-center"
-      >
-        <Glyph size={19} strokeWidth={2} color={tone.tint} />
-      </View>
+      <Thumb row={row} tone={tone} />
 
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
@@ -130,6 +170,13 @@ function DocRow({
             {row.label}
           </Text>
 
+          {/* Only the good news gets a chip.
+              "Pending" sat against every row on the screen — including the ones
+              the employee had just uploaded correctly — and a list where every
+              line is flagged amber reads as six problems rather than six
+              documents safely on file. Verification is HR's queue, not the
+              employee's task, so the row states the fact (it is here) and marks
+              the exception (HR has checked it). */}
           {row.verified === true ? (
             <Badge
               label="Verified"
@@ -142,13 +189,7 @@ function DocRow({
                 />
               }
             />
-          ) : row.verified === false ? (
-            <Badge label="Pending" tone={surface.warning} />
-          ) : (
-            /* HR never stated a verification status for this one. "On file" is
-               what the record actually says; "Pending" would be us inventing it. */
-            <Badge label="On file" tone={surface.neutral} />
-          )}
+          ) : null}
         </View>
 
         <Text
@@ -179,7 +220,7 @@ function DocRow({
           accessibilityState={{ busy: downloading }}
           style={({ pressed }) => ({
             backgroundColor: tint.bg,
-            borderRadius: radius.well - 4,
+            borderRadius: radius.well,
             opacity: downloading ? 0.6 : pressed ? 0.7 : 1,
           })}
           className="h-9 w-9 items-center justify-center"
@@ -194,17 +235,33 @@ function DocRow({
     </View>
   );
 
-  // Only a row with a file behind it is a button. Wrapping an unopenable row in
+  /**
+   * Each document is its own card.
+   *
+   * They were six rows inside one slab, split by hairlines — which is the right
+   * shape for a table of one KIND of thing, and wrong for this: a passport photo,
+   * a payroll CSV and a signed policy have nothing to do with each other except
+   * that HR holds all three. Separate cards with real space between them say
+   * "six separate things"; a divider says "six lines of one thing".
+   */
+  const card = {
+    backgroundColor: c.card,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: space.md + 2,
+  } as const;
+
+  // Only a card with a file behind it is a button. Wrapping an unopenable one in
   // a Pressable is an affordance that lies.
-  if (!row.url) return <View className="py-1">{body}</View>;
+  if (!row.url) return <View style={card}>{body}</View>;
 
   return (
     <Pressable
       onPress={() => onPreview(row)}
       accessibilityRole="button"
       accessibilityLabel={`Preview ${row.label}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-      className="py-1"
+      style={({ pressed }) => ({ ...card, opacity: pressed ? 0.7 : 1 })}
     >
       {body}
     </Pressable>
@@ -272,11 +329,17 @@ export default function DocumentsScreen() {
     return out;
   }, [profile.data]);
 
-  // Only rows that actually carry a flag can be counted, and only those form
-  // the denominator — "2 verified" out of seven when five never had a flag was
-  // a support ticket waiting to happen.
-  const flagged = rows.filter((r) => r.verified !== null);
-  const verified = flagged.filter((r) => r.verified).length;
+  // Counted, not scored. "0/6 verified" under the title turned a page about the
+  // employee's paperwork into a report card on HR's backlog — the count is only
+  // worth printing once there is something to print.
+  const verified = rows.filter((r) => r.verified === true).length;
+
+  // A frozen record refuses every write, uploads included. Better to say so on
+  // the button than to let someone photograph an Aadhaar card and meet a 403.
+  const locked = Boolean(profile.data?.is_lock);
+  const canUpload = !locked && !profile.isLoading && !profile.error;
+
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // Which row's file is on screen, and which row is currently being fetched.
   // Keyed by row, not a boolean: two taps on two rows must not make both
@@ -302,10 +365,27 @@ export default function DocumentsScreen() {
         title="Documents"
         subtitle={
           rows.length
-            ? `${rows.length} on file${flagged.length ? ` · ${verified}/${flagged.length} verified` : ""}`
+            ? `${rows.length} on file${verified ? ` · ${verified} verified` : ""}`
             : "What HR holds for you"
         }
         onBack={() => navigation.goBack()}
+        right={
+          canUpload ? (
+            <Pressable
+              onPress={() => setUploadOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Upload a document"
+              style={({ pressed }) => ({
+                backgroundColor: brand[600],
+                borderRadius: radius.button,
+                opacity: pressed ? 0.85 : 1,
+              })}
+              className="h-10 w-10 items-center justify-center"
+            >
+              <Plus size={20} strokeWidth={2.4} color="#FFFFFF" />
+            </Pressable>
+          ) : null
+        }
       />
 
       <ScrollView
@@ -324,9 +404,9 @@ export default function DocumentsScreen() {
       >
         {profile.isLoading ? (
           <View style={{ gap: space.md }}>
-            <Skeleton height={72} radius={radius.card - 4} />
-            <Skeleton height={72} radius={radius.card - 4} />
-            <Skeleton height={72} radius={radius.card - 4} />
+            <Skeleton height={72} radius={radius.card} />
+            <Skeleton height={72} radius={radius.card} />
+            <Skeleton height={72} radius={radius.card} />
           </View>
         ) : profile.error ? (
           <EmptyState
@@ -342,36 +422,53 @@ export default function DocumentsScreen() {
           <EmptyState
             icon={<FileText size={32} strokeWidth={1.6} color={brand[600]} />}
             title="Nothing on file yet"
-            message="HR has not uploaded any documents against your record. Reach out to them if you think something should be here."
+            message={
+              locked
+                ? "Your record is locked by HR, so nothing can be added from here until they unlock it."
+                : "Nothing has been filed against your record yet. Add your ID proofs, résumé or certificates and HR will verify them."
+            }
+            actionLabel={locked ? undefined : "Upload a document"}
+            onAction={locked ? undefined : () => setUploadOpen(true)}
           />
         ) : (
-          <View
-            style={{
-              backgroundColor: c.card,
-              borderRadius: 4,
-              borderWidth: 1,
-              borderColor: c.border,
-              padding: space.lg + 2,
-              gap: space.md,
-              // ...(dark ? shadow.none : shadow.card),
-            }}
-          >
-            {rows.map((r, i) => (
-              <View key={r.key}>
-                <DocRow
-                  row={r}
-                  onPreview={setPreview}
-                  onDownload={download}
-                  downloading={busyKey === r.key}
-                />
-                {i === rows.length - 1 ? null : (
-                  <View
-                    style={{ backgroundColor: c.border, marginLeft: 56 }}
-                    className="mt-3 h-px"
-                  />
-                )}
-              </View>
+          <View style={{ gap: space.md }}>
+            {rows.map((r) => (
+              <DocRow
+                key={r.key}
+                row={r}
+                onPreview={setPreview}
+                onDownload={download}
+                downloading={busyKey === r.key}
+              />
             ))}
+
+            {/* The way in, at the end of the list rather than only in the bar.
+                A header glyph is the first thing a returning user reaches for
+                and the last thing a new one finds — someone who has just
+                scrolled their six documents looking for the missing seventh is
+                already looking at the bottom of the list. Dashed, so it reads as
+                the empty slot after the cards rather than as a seventh one. */}
+            {canUpload ? (
+              <Pressable
+                onPress={() => setUploadOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Upload a document"
+                style={({ pressed }) => ({
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderStyle: "dashed",
+                  borderRadius: 4,
+                  paddingVertical: space.lg,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                className="flex-row items-center justify-center gap-2"
+              >
+                <Plus size={16} strokeWidth={2.4} color={brand[600]} />
+                <Text style={{ color: brand[600] }} className={T.buttonSm}>
+                  Add a document
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
@@ -379,9 +476,9 @@ export default function DocumentsScreen() {
           style={{ color: c.textFaint }}
           className={`mt-4 leading-4 ${T.micro}`}
         >
-          Tap a row to preview it, or the arrow to save a copy. Uploading and
-          correcting documents is done by HR — ID numbers are shown part-masked
-          on purpose.
+          {locked
+            ? "Tap a row to preview it, or the arrow to save a copy. Your record is locked by HR, so nothing can be added or replaced from here right now."
+            : "Tap a row to preview it, or the arrow to save a copy. Anything you upload goes to HR to verify — ID numbers are shown part-masked on purpose."}
         </Text>
       </ScrollView>
 
@@ -392,6 +489,15 @@ export default function DocumentsScreen() {
         url={preview?.url ?? null}
         label={preview?.label ?? "Document"}
         onClose={() => setPreview(null)}
+      />
+
+      {/* The sheet writes through `PATCH /employees/me`, which invalidates
+          `MyProfile` — the list behind it refreshes itself, so there is no
+          local copy of `documents[]` here to keep in step. */}
+      <DocumentUploadSheet
+        visible={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        profile={profile.data}
       />
     </View>
   );
