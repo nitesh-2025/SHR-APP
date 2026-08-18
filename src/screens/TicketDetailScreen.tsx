@@ -28,6 +28,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, personUser } from '../components/Avatar';
+import { MaskedText } from '../components/MaskedText';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Badge, EmptyState, Skeleton } from '../components/ui';
 import { describeApiError, toastApiError } from '../lib/apiError';
@@ -44,7 +45,7 @@ import {
 import { radius, shadow, space, surface, toneFor, type Surface } from '../theme/colors';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from '../theme/type';
-import { fmtDayShort, fmtTime } from '../utils/date';
+import { fmtDate, fmtDayShort, fmtTime, timeAgo } from '../utils/date';
 
 /* ── Vocabulary ───────────────────────────────────────────────────────────── */
 
@@ -62,11 +63,12 @@ const STATUS_TONE: Record<string, { label: string; tone: Surface }> = {
   rejected: { label: 'Rejected', tone: surface.purple },
 };
 
-const PRIORITY_TONE: Record<string, Surface> = {
-  low: surface.neutral,
-  medium: surface.info,
-  high: surface.warning,
-  critical: surface.danger,
+/** Same table as the list screen — the raw enum never reaches a label. */
+const PRIORITY_META: Record<string, { label: string; tone: Surface }> = {
+  low: { label: 'Low', tone: surface.neutral },
+  medium: { label: 'Medium', tone: surface.info },
+  high: { label: 'High', tone: surface.warning },
+  critical: { label: 'Critical', tone: surface.danger },
 };
 
 const statusKey = (raw?: string) =>
@@ -153,9 +155,11 @@ function CommentBubble({
             ...(dark ? shadow.none : shadow.soft),
           }}
         >
-          <Text style={{ color: c.text }} className={`leading-5 ${T.body}`}>
-            {comment.content}
-          </Text>
+          <MaskedText
+            value={comment.content}
+            style={{ color: c.text }}
+            className={`leading-5 ${T.body}`}
+          />
         </View>
 
         <Text
@@ -294,7 +298,7 @@ export default function TicketDetailScreen() {
     tone: surface.neutral,
   };
   const statusTone = toneFor(status.tone, dark);
-  const priority = PRIORITY_TONE[String(ticket.data?.priority ?? '').toLowerCase()];
+  const priority = PRIORITY_META[String(ticket.data?.priority ?? '').toLowerCase()];
   const settled = SETTLED.has(key);
   const raised = ticket.data?.createdAt ?? ticket.data?.created_at;
 
@@ -401,14 +405,28 @@ export default function TicketDetailScreen() {
                 <View className="mt-2.5 flex-row flex-wrap items-center" style={{ gap: space.sm }}>
                   <Badge label={status.label} tone={status.tone} />
                   {priority ? (
-                    <Badge label={`${ticket.data?.priority} priority`} tone={priority} />
+                    <Badge label={`${priority.label} priority`} tone={priority.tone} />
                   ) : null}
                 </View>
 
-                {ticket.data?.description ? (
-                  <Text style={{ color: c.textMuted }} className={`mt-3 leading-5 ${T.secondary}`}>
-                    {ticket.data.description}
+                {/* When it was raised, in both readings: the age answers "has
+                    anyone looked at this yet", the date answers "which one was
+                    this again". The header only carried the second. */}
+                {raised ? (
+                  <Text style={{ color: c.textFaint }} className={`mt-2 ${T.micro}`}>
+                    Raised {timeAgo(raised)} · {fmtDate(raised.slice(0, 10))}
                   </Text>
+                ) : null}
+
+                {/* Masked: a ticket body is where the account number that did
+                    not get credited gets pasted, and this screen is read in
+                    the open more than any other. */}
+                {ticket.data?.description ? (
+                  <MaskedText
+                    value={ticket.data.description}
+                    style={{ color: c.textMuted }}
+                    className={`mt-3 leading-5 ${T.secondary}`}
+                  />
                 ) : null}
 
                 {refOf(ticket.data?.assigned_to) ? (

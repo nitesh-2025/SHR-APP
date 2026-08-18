@@ -1,9 +1,11 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import {
+  Hash,
   LifeBuoy,
   Plus,
   Send,
   TriangleAlert,
+  type LucideIcon,
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
@@ -18,8 +20,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Avatar, personUser } from "../components/Avatar";
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { BottomSheet } from "../components/BottomSheet";
+import { MaskedText } from "../components/MaskedText";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, Button, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
@@ -31,11 +35,12 @@ import {
   useCreateTicketMutation,
   useGetTicketsQuery,
   type TicketItem,
+  type TicketUserRef,
 } from "../store/ticketsApi";
-import { radius, shadow, space, surface, type Surface } from "../theme/colors";
+import { radius, shadow, space, surface, toneFor, type Surface } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
-import { fmtDayShort } from "../utils/date";
+import { timeAgo } from "../utils/date";
 
 /* ── Vocabulary ───────────────────────────────────────────────────────────── */
 
@@ -53,14 +58,36 @@ const STATUS_TONE: Record<string, { label: string; tone: Surface }> = {
   rejected: { label: "Rejected", tone: surface.purple },
 };
 
-const PRIORITY_TONE: Record<string, Surface> = {
-  low: surface.neutral,
-  medium: surface.info,
-  high: surface.warning,
-  critical: surface.danger,
+/**
+ * Priority carries a LABEL now, not just a colour.
+ *
+ * The row used to print the raw enum straight from the wire — "medium
+ * priority", lower-case, mid-sentence — which is the single loudest tell that a
+ * screen is rendering a database column rather than saying something. The value
+ * is also the row's left edge, so a queue can be scanned for what is on fire
+ * without reading a word of it.
+ */
+const PRIORITY_META: Record<string, { label: string; tone: Surface }> = {
+  low: { label: "Low", tone: surface.neutral },
+  medium: { label: "Medium", tone: surface.info },
+  high: { label: "High", tone: surface.warning },
+  critical: { label: "Critical", tone: surface.danger },
 };
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
+const PRIORITY_LABEL: Record<(typeof PRIORITIES)[number], string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+/** `{ first_name, last_name }` → a name, or null when the ref is just an id. */
+const nameOfRef = (v?: TicketUserRef | string | null): string | null => {
+  if (!v || typeof v === "string") return null;
+  return [v.first_name, v.last_name].filter(Boolean).join(" ").trim() || v.email || null;
+};
 
 const statusKey = (raw?: string) =>
   String(raw ?? "open").toLowerCase().replace(/[\s-]+/g, "_");
@@ -91,6 +118,21 @@ const FILTERS: { key: string; label: string }[] = [
 
 /* ── Row ──────────────────────────────────────────────────────────────────── */
 
+/**
+ * One ticket in the queue.
+ *
+ * The old row stacked four left-aligned blocks of the same weight — title,
+ * meta, description, a lone priority chip on its own line — so nothing led and
+ * the card was tall for what it said. It reads as a record now: the identity
+ * line on top, the sentence in the middle, and the people-and-priority footer
+ * under a rule, with the priority also carried by the left edge so a queue can
+ * be skimmed vertically.
+ *
+ * The description runs through `MaskedText`. Ticket bodies are where people
+ * paste the account number that did not get credited and the mobile the OTP
+ * never reached, and this list is the most over-the-shoulder-readable surface
+ * in the app.
+ */
 function TicketRow({ ticket, onPress }: { ticket: TicketItem; onPress: () => void }) {
   const { c, dark } = useTheme();
 
@@ -99,58 +141,149 @@ function TicketRow({ ticket, onPress }: { ticket: TicketItem; onPress: () => voi
     label: ticket.status || "Unknown",
     tone: surface.neutral,
   };
-  const priority = PRIORITY_TONE[String(ticket.priority).toLowerCase()];
+  const priority = PRIORITY_META[String(ticket.priority).toLowerCase()];
   const raised = ticket.createdAt ?? ticket.created_at;
+  const handler = nameOfRef(ticket.assigned_to);
+  const rail = toneFor(priority?.tone ?? surface.neutral, dark);
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${ticket.title}. ${status.label}`}
+      accessibilityLabel={[
+        ticket.ticket_no,
+        ticket.title,
+        status.label,
+        priority ? `${priority.label} priority` : null,
+        raised ? `raised ${timeAgo(raised)}` : null,
+      ]
+        .filter(Boolean)
+        .join(". ")}
       accessibilityHint="Opens the ticket and its replies"
       style={({ pressed }) => ({
         backgroundColor: c.card,
         borderRadius: radius.card,
         borderWidth: 1,
         borderColor: c.border,
+        borderLeftWidth: 3,
+        borderLeftColor: rail.tint,
         padding: space.lg,
         opacity: pressed ? 0.85 : 1,
         ...(dark ? shadow.none : shadow.soft),
       })}
     >
-      <View className="flex-row items-start gap-3">
-        <View className="flex-1">
-          <Text style={{ color: c.text }} className={T.cardTitleSm} numberOfLines={2}>
-            {ticket.title}
-          </Text>
-          <Text
-            style={{ color: c.textMuted }}
-            className={`mt-0.5 ${T.micro}`}
-            numberOfLines={1}
-          >
-            {[ticket.ticket_no, raised ? `Raised ${fmtDayShort(raised)}` : null]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
-        </View>
+      {/* ── Identity line ─────────────────────────────────────────────────
+          Ticket number and age, in the faintest ink on the card. Both are
+          reference facts — you use them to talk about the ticket, never to
+          decide which one to open — so they sit above the title at a size that
+          stays out of its way. */}
+      <View className="flex-row items-center gap-2">
+        {ticket.ticket_no ? (
+          <View className="flex-row items-center gap-0.5">
+            <Hash size={11} strokeWidth={2.6} color={c.textFaint} />
+            <Text
+              style={{ color: c.textFaint }}
+              className={T.count}
+              allowFontScaling={false}
+            >
+              {ticket.ticket_no.replace(/^#/, "")}
+            </Text>
+          </View>
+        ) : null}
 
+        {ticket.ticket_no && raised ? (
+          <View
+            style={{
+              width: 3,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: c.textFaint,
+            }}
+          />
+        ) : null}
+
+        {raised ? (
+          <Text style={{ color: c.textFaint }} className={T.count}>
+            {timeAgo(raised)}
+          </Text>
+        ) : null}
+
+        <View className="flex-1" />
         <Badge label={status.label} tone={status.tone} />
       </View>
 
+      <Text
+        style={{ color: c.text }}
+        className={`mt-1.5 ${T.cardTitle}`}
+        numberOfLines={2}
+      >
+        {ticket.title}
+      </Text>
+
       {ticket.description ? (
-        <Text
+        <MaskedText
+          value={ticket.description}
           style={{ color: c.textMuted }}
-          className={`mt-2.5 leading-5 ${T.secondary}`}
-          numberOfLines={3}
-        >
-          {ticket.description}
-        </Text>
+          className={`mt-1.5 leading-5 ${T.secondary}`}
+          numberOfLines={2}
+        />
       ) : null}
 
-      {priority ? (
-        <View className="mt-3 flex-row">
-          <Badge label={`${ticket.priority} priority`} tone={priority} />
-        </View>
+      {/* ── Footer ────────────────────────────────────────────────────────
+          Priority and who has it. Under a rule rather than floating in the
+          card's whitespace, so the row has a bottom edge to end on instead of
+          trailing off. */}
+      {priority || handler ? (
+        <>
+          <View
+            style={{ backgroundColor: c.border }}
+            className="mt-3 h-px"
+          />
+          <View className="mt-2.5 flex-row items-center gap-2">
+            {priority ? (
+              <View className="flex-row items-center gap-1.5">
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 4,
+                    backgroundColor: priority.tone.tint,
+                  }}
+                />
+                <Text style={{ color: c.textMuted }} className={T.micro}>
+                  {priority.label} priority
+                </Text>
+              </View>
+            ) : null}
+
+            <View className="flex-1" />
+
+            {handler ? (
+              <View className="flex-row items-center gap-1.5">
+                <Avatar
+                  user={personUser({
+                    ...(typeof ticket.assigned_to === "object"
+                      ? ticket.assigned_to
+                      : {}),
+                    name: handler,
+                  })}
+                  size={18}
+                />
+                <Text
+                  style={{ color: c.textMuted }}
+                  className={T.micro}
+                  numberOfLines={1}
+                >
+                  {handler}
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ color: c.textFaint }} className={T.micro}>
+                Unassigned
+              </Text>
+            )}
+          </View>
+        </>
       ) : null}
     </Pressable>
   );
@@ -189,6 +322,26 @@ export default function TicketsScreen() {
   const [createTicket, { isLoading: creating }] = useCreateTicketMutation();
 
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
+
+  /**
+   * Per-status counts for the filter rail.
+   *
+   * The backend already returns `status_counts` alongside the page, so the
+   * numbers cost nothing — and a rail without them made every chip look equally
+   * worth tapping, which is how "Rejected" got opened to find it empty. Keys
+   * run through `statusKey` because the same spelling drift that forced the
+   * normaliser in the first place reaches the counts too.
+   */
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(list.data?.meta?.status_counts ?? {})) {
+      out[statusKey(k)] = (out[statusKey(k)] ?? 0) + (Number(v) || 0);
+    }
+    // "All" is whatever the server says the unfiltered total is; falling back
+    // to the page length would under-report the moment a queue outgrows 50.
+    out[""] = list.data?.meta?.total ?? Object.values(out).reduce((a, b) => a + b, 0);
+    return out;
+  }, [list.data]);
 
   const reset = () => {
     setTitle("");
@@ -252,12 +405,14 @@ export default function TicketsScreen() {
       >
         {FILTERS.map((f) => {
           const active = status === f.key;
+          const n = counts[f.key];
           return (
             <Pressable
               key={f.key || "all"}
               onPress={() => setStatus(f.key)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
+              accessibilityLabel={n ? `${f.label}, ${n}` : f.label}
               style={({ pressed }) => ({
                 backgroundColor: active ? brand[600] : c.card,
                 borderRadius: radius.pill,
@@ -265,7 +420,7 @@ export default function TicketsScreen() {
                 borderColor: c.border,
                 opacity: pressed ? 0.75 : 1,
               })}
-              className="h-9 items-center justify-center px-3.5"
+              className="h-9 flex-row items-center justify-center gap-1.5 px-3.5"
             >
               <Text
                 style={{ color: active ? "#FFFFFF" : c.text }}
@@ -274,6 +429,27 @@ export default function TicketsScreen() {
               >
                 {f.label}
               </Text>
+              {/* Zero is shown as nothing rather than as "0": an empty state
+                  the chip already communicates by being empty when tapped, and
+                  a rail of zeros reads as a broken screen. */}
+              {n ? (
+                <View
+                  style={{
+                    backgroundColor: active ? "rgba(255,255,255,0.22)" : c.fill,
+                    borderRadius: radius.pill,
+                    minWidth: 20,
+                  }}
+                  className="items-center px-1.5 py-0.5"
+                >
+                  <Text
+                    style={{ color: active ? "#FFFFFF" : c.textMuted }}
+                    className={T.count}
+                    allowFontScaling={false}
+                  >
+                    {n}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -296,9 +472,10 @@ export default function TicketsScreen() {
       >
         {list.isLoading ? (
           <>
-            <Skeleton height={128} radius={radius.card} />
-            <Skeleton height={128} radius={radius.card} />
-            <Skeleton height={128} radius={radius.card} />
+            <Skeleton height={150} radius={radius.card} />
+            <Skeleton height={150} radius={radius.card} />
+            <Skeleton height={150} radius={radius.card} />
+            <Skeleton height={150} radius={radius.card} />
           </>
         ) : list.error ? (
           <EmptyState
@@ -427,7 +604,7 @@ export default function TicketsScreen() {
                         className={T.badge}
                         numberOfLines={1}
                       >
-                        {p}
+                        {PRIORITY_LABEL[p]}
                       </Text>
                     </Pressable>
                   );

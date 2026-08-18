@@ -82,6 +82,35 @@ export function fmtDuration(minutes?: number): string {
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
 
+/**
+ * `2026-08-16T09:12:00Z` → `2d ago`.
+ *
+ * A ticket's age is the thing you scan a queue for — "is anyone looking at
+ * this yet" — and an absolute date makes you do the subtraction yourself.
+ * Anything older than a month falls back to the date, because "47d ago" is a
+ * number nobody converts back into a day they remember.
+ */
+export function timeAgo(value?: string): string {
+  if (!value) return '';
+  const then = new Date(value);
+  if (Number.isNaN(then.getTime())) return '';
+
+  const seconds = Math.floor((Date.now() - then.getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+
+  return fmtDayShort(value.slice(0, 10));
+}
+
 /** Inclusive day count between two `YYYY-MM-DD` values. 0 when unparseable. */
 export function daysBetween(from?: string, to?: string): number {
   const a = parseYmd(from);

@@ -3,12 +3,15 @@ import {
   BadgeCheck,
   Cake,
   ChevronLeft,
+  Clock3,
   Crown,
+  LogIn,
   Mail,
   MessageCircle,
   MessageSquare,
   Phone,
   Search,
+  UserCheck,
   UserRoundX,
   UsersRound,
   X,
@@ -28,12 +31,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar, personUser } from "../components/Avatar";
 import { BottomSheet } from "../components/BottomSheet";
+import { MaskedValue } from "../components/MaskedValue";
 import { Badge, EmptyState, IconWell, Skeleton } from "../components/ui";
 import { usePresence } from "../hooks/usePresence";
 import { describeApiError } from "../lib/apiError";
 import { toast } from "../lib/toast";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { selectCurrentUser, useAppSelector } from "../store";
+import {
+  useGetRosterQuery,
+  type RosterEntry,
+} from "../store/attendanceApi";
 import {
   useGetEmployeesQuery,
   useGetMyProfileQuery,
@@ -52,6 +60,7 @@ import {
 } from "../theme/colors";
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
+import { fmtDate, fmtTime, ymd } from "../utils/date";
 
 /**
  * A department is rarely more than this, and the endpoint pages server-side —
@@ -90,6 +99,32 @@ async function open(url: string, failure: string) {
   }
 }
 
+/* ── Today, per person ────────────────────────────────────────────────────── */
+
+/**
+ * What the roster knows about one person TODAY.
+ *
+ * Deliberately not called "absent". The roster is punch-derived: it knows
+ * whether somebody clocked in, and nothing about approved leave — so labelling
+ * a colleague on sanctioned leave as "Absent" in front of the whole department
+ * would be the app inventing an accusation out of a missing row. "No punch yet"
+ * is the entire truth of what is known, and it stops being a judgement.
+ */
+type Today = { label: string; tone: Surface; icon: LucideIcon; at?: string };
+
+function todayOf(entry?: RosterEntry): Today | null {
+  if (!entry) return null;
+  const at = fmtTime(entry.attendance?.clock_in?.at) ?? undefined;
+
+  if (!entry.came) {
+    return { label: "No punch yet", tone: surface.neutral, icon: Clock3 };
+  }
+  if (entry.attendance?.is_late) {
+    return { label: at ? `Late · ${at}` : "Late", tone: surface.warning, icon: Clock3, at };
+  }
+  return { label: at ? `In · ${at}` : "Present", tone: surface.success, icon: LogIn, at };
+}
+
 /* ── Person row ───────────────────────────────────────────────────────────── */
 
 function PersonRow({
@@ -97,6 +132,7 @@ function PersonRow({
   isMe,
   birthday,
   online,
+  today,
   onPress,
 }: {
   person: Employee;
@@ -105,9 +141,17 @@ function PersonRow({
   birthday: boolean;
   /** Live, off the presence socket. */
   online: boolean;
+  /**
+   * Today's punch, when the roster is readable. Null covers two different
+   * cases on purpose — the roster has not loaded, and the caller is not allowed
+   * to read it — because the row's answer to both is the same: say nothing
+   * rather than guess.
+   */
+  today: Today | null;
   onPress: () => void;
 }) {
   const { c, dark } = useTheme();
+  const tone = today ? toneFor(today.tone, dark) : null;
 
   return (
     <Pressable
@@ -117,6 +161,7 @@ function PersonRow({
         person.name ?? "Teammate",
         person.designation,
         person.employee_id,
+        today?.label ?? null,
         online ? "online" : null,
         birthday ? "birthday today" : null,
       ]
@@ -199,31 +244,50 @@ function PersonRow({
       </View>
 
       {/* ── Right column ───────────────────────────────────────────────────
-          The employee id gets its own chip, right-aligned. It is the field a
-          directory is actually scanned for — a column of chips can be read
-          straight down, where the same string buried mid-sentence cannot. */}
+          Today's punch on top, the employee id under it. The id used to sit
+          alone up here, which made a directory of who EXISTS — the question
+          people actually open this screen with in the morning is who is IN,
+          and that answer has to be the one the eye lands on first. */}
       <View className="items-end gap-1">
-        {person.employee_id ? (
+        {today && tone ? (
           <View
-            style={{ backgroundColor: c.fill, borderRadius: radius.pill }}
-            className="px-2.5 py-1"
+            style={{
+              backgroundColor: tone.bg,
+              borderColor: tone.border,
+              borderWidth: 1,
+              borderRadius: radius.pill,
+            }}
+            className="flex-row items-center gap-1 px-2 py-1"
           >
+            <today.icon size={11} strokeWidth={2.6} color={tone.tint} />
             <Text
-              style={{ color: c.textMuted }}
+              style={{ color: tone.text }}
+              className={T.count}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              {today.label}
+            </Text>
+          </View>
+        ) : null}
+
+        <View className="flex-row items-center gap-1.5">
+          {/* Presence of a number, not a second way to dial: the sheet owns
+              every action, so one tap target does one thing. */}
+          {person.phone ? (
+            <Phone size={12} strokeWidth={2} color={c.textFaint} />
+          ) : null}
+          {person.employee_id ? (
+            <Text
+              style={{ color: c.textFaint }}
               className={T.count}
               numberOfLines={1}
               allowFontScaling={false}
             >
               {person.employee_id}
             </Text>
-          </View>
-        ) : null}
-
-        {/* Presence of a number, not a second way to dial: the sheet owns every
-            action, so one tap target does one thing. */}
-        {person.phone ? (
-          <Phone size={13} strokeWidth={2} color={c.textFaint} />
-        ) : null}
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -236,12 +300,24 @@ function ContactRow({
   label,
   value,
   tone,
+  sensitive,
   onPress,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
   tone: Surface;
+  /**
+   * A personal number or address — shown as `XXXXXX9518` with reveal and copy
+   * rather than printed in full.
+   *
+   * The row still dials on tap, so nothing is taken away: what changes is that
+   * a colleague's personal mobile is no longer sitting in the open the whole
+   * time the sheet is up, which is when it ends up in a screenshot of "who do I
+   * call about this". The reveal and the copy are both inside the row, and both
+   * beat the row's own press because the inner Pressable wins the responder.
+   */
+  sensitive?: boolean;
   onPress: () => void;
 }) {
   const { c } = useTheme();
@@ -264,13 +340,24 @@ function ContactRow({
         <Text style={{ color: c.textMuted }} className={T.nano}>
           {label}
         </Text>
-        <Text
-          style={{ color: c.text }}
-          className={`mt-0.5 ${T.cardTitleSm}`}
-          numberOfLines={1}
-        >
-          {value}
-        </Text>
+        {sensitive ? (
+          <View className="mt-0.5">
+            <MaskedValue
+              value={value}
+              label={label}
+              style={{ color: c.text }}
+              className={T.cardTitleSm}
+            />
+          </View>
+        ) : (
+          <Text
+            style={{ color: c.text }}
+            className={`mt-0.5 ${T.cardTitleSm}`}
+            numberOfLines={1}
+          >
+            {value}
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -300,6 +387,8 @@ export default function TeamScreen() {
   const [query, setQuery] = useState("");
   /** The teammate whose contact sheet is open. */
   const [selected, setSelected] = useState<Employee | null>(null);
+  /** Narrow the list to who is in, or who has not punched. */
+  const [only, setOnly] = useState<"all" | "in" | "out">("all");
 
   const profile = useGetMyProfileQuery();
   const dept = refOf<DepartmentRef>(profile.data?.department_id);
@@ -311,6 +400,50 @@ export default function TeamScreen() {
     { skip: !departmentId },
   );
   const birthdays = useGetUpcomingBirthdaysQuery({ days: 30 });
+
+  /**
+   * Who is actually in today.
+   *
+   * `/attendance/roster` is the one endpoint that joins the employee list to
+   * the day's punches server-side — the alternative was a punch lookup per
+   * teammate, which is a request per row for a boolean. It is a supervisor
+   * read, so a plain employee may get a 403 back; that is not an error worth
+   * showing, it just means this section is not theirs to see, and every part of
+   * the screen that depends on it disappears rather than half-rendering.
+   */
+  const todayKey = ymd(new Date());
+  const roster = useGetRosterQuery(
+    { date: todayKey, department_id: departmentId, limit: PAGE },
+    { skip: !departmentId },
+  );
+
+  /** Roster rows keyed by employee `_id` — the id both APIs agree on. */
+  const rosterById = useMemo(() => {
+    const map = new Map<string, RosterEntry>();
+    for (const e of roster.data?.items ?? []) map.set(e._id, e);
+    return map;
+  }, [roster.data]);
+
+  const rosterReadable = Boolean(departmentId) && !roster.error;
+
+  /**
+   * Counted from the ROWS, not from `meta.counts`.
+   *
+   * The server's counts describe the whole department; these rows are the page
+   * the screen actually drew. A header that says "12 present" above eight
+   * visible people is a bug report waiting to be filed.
+   */
+  const inToday = useMemo(() => {
+    const items = roster.data?.items ?? [];
+    let present = 0;
+    let late = 0;
+    for (const e of items) {
+      if (!e.came) continue;
+      present += 1;
+      if (e.attendance?.is_late) late += 1;
+    }
+    return { present, late, pending: items.length - present, total: items.length };
+  }, [roster.data]);
 
   /** Employee codes with a birthday TODAY — the join key both APIs agree on. */
   const todayCodes = useMemo(() => {
@@ -337,14 +470,25 @@ export default function TeamScreen() {
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const rest = people.filter((p) => p._id !== managerRecord?._id);
+    let rest = people.filter((p) => p._id !== managerRecord?._id);
+
+    // The punch filter runs before the text one: "who is in" is a smaller set
+    // than "whose name contains an a", so narrowing by it first is both the
+    // cheaper order and the one that matches how the two chips read together.
+    if (only !== "all" && rosterReadable) {
+      rest = rest.filter((p) => {
+        const came = rosterById.get(p._id)?.came;
+        return only === "in" ? came === true : came === false;
+      });
+    }
+
     if (!q) return rest;
     return rest.filter((p) =>
       [p.name, p.designation, p.employee_id, p.email]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     );
-  }, [people, managerRecord, query]);
+  }, [people, managerRecord, query, only, rosterReadable, rosterById]);
 
   const myEmployeeId = me?.employee_id;
   const total = team.data?.meta?.total ?? people.length;
@@ -357,7 +501,10 @@ export default function TeamScreen() {
 
   const refreshAll = () => {
     profile.refetch();
-    if (departmentId) team.refetch();
+    if (departmentId) {
+      team.refetch();
+      roster.refetch();
+    }
     birthdays.refetch();
   };
 
@@ -487,6 +634,149 @@ export default function TeamScreen() {
           ) : null}
         </View>
 
+        {/* ── In today ───────────────────────────────────────────────────
+            The first question anyone opens Team with in the morning. It sits
+            above the birthday strip and the manager card because both of those
+            are things you look up occasionally, and this is the thing you came
+            for.
+
+            Absent from this panel on purpose: the word "absent". The roster is
+            punch-derived and knows nothing about approved leave, so a person on
+            sanctioned leave and a person who overslept arrive here identical.
+            Calling both "absent" in front of their whole department would be
+            the app inventing a fact — "yet to punch" is all that is known. */}
+        {rosterReadable ? (
+          <View
+            style={{
+              marginHorizontal: space.screen,
+              marginTop: space.lg,
+              backgroundColor: c.card,
+              borderRadius: radius.card,
+              borderWidth: 1,
+              borderColor: c.border,
+              padding: space.lg,
+              ...(dark ? shadow.none : shadow.soft),
+            }}
+          >
+            <View className="flex-row items-center gap-3">
+              <IconWell tone={surface.success} size={38} round>
+                <UserCheck
+                  size={18}
+                  strokeWidth={2.2}
+                  color={surface.success.tint}
+                />
+              </IconWell>
+
+              <View className="flex-1">
+                <Text style={{ color: c.text }} className={T.cardTitleSm}>
+                  In today
+                </Text>
+                <Text
+                  style={{ color: c.textMuted }}
+                  className={`mt-0.5 ${T.micro}`}
+                  numberOfLines={1}
+                >
+                  {fmtDate(todayKey)}
+                  {inToday.late
+                    ? ` · ${inToday.late} late`
+                    : ""}
+                </Text>
+              </View>
+
+              {roster.isLoading ? (
+                <Skeleton width={54} height={26} radius={radius.well} />
+              ) : (
+                <View className="flex-row items-baseline">
+                  <Text style={{ color: c.text }} className={T.kpiSm}>
+                    {inToday.present}
+                  </Text>
+                  <Text style={{ color: c.textFaint }} className={T.micro}>
+                    {" / "}
+                    {inToday.total}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* One bar, three segments — on time, late, still out. A row of
+                three numbers said the same thing but had to be read; the bar
+                is understood before it is read. */}
+            <View
+              style={{
+                height: 6,
+                marginTop: space.md,
+                borderRadius: radius.pill,
+                backgroundColor: c.fill,
+                overflow: "hidden",
+              }}
+              className="flex-row"
+            >
+              <View
+                style={{
+                  flexGrow: Math.max(0, inToday.present - inToday.late),
+                  backgroundColor: surface.success.tint,
+                }}
+              />
+              <View
+                style={{
+                  flexGrow: inToday.late,
+                  backgroundColor: surface.warning.tint,
+                }}
+              />
+              <View style={{ flexGrow: inToday.pending }} />
+            </View>
+
+            {/* ── Filter ───────────────────────────────────────────────
+                Three chips rather than a toggle: "who is still out" is as
+                real a question as "who is in", and a two-state switch would
+                have made one of them the absence of the other. */}
+            <View className="mt-3 flex-row" style={{ gap: space.sm }}>
+              {(
+                [
+                  { key: "all", label: "Everyone", count: inToday.total },
+                  { key: "in", label: "In", count: inToday.present },
+                  { key: "out", label: "Yet to punch", count: inToday.pending },
+                ] as const
+              ).map((f) => {
+                const active = only === f.key;
+                return (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => setOnly(f.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${f.label}, ${f.count}`}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      backgroundColor: active ? tint.bg : c.fill,
+                      borderRadius: radius.well,
+                      borderWidth: 1,
+                      borderColor: active ? brand[600] : "transparent",
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                    className="items-center py-2"
+                  >
+                    <Text
+                      style={{ color: active ? brand[700] : c.text }}
+                      className={T.cardTitleSm}
+                      allowFontScaling={false}
+                    >
+                      {f.count}
+                    </Text>
+                    <Text
+                      style={{ color: active ? brand[600] : c.textMuted }}
+                      className={T.micro}
+                      numberOfLines={1}
+                    >
+                      {f.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         {/* ── Birthdays today ────────────────────────────────────────────
             Only when there ARE any. A permanent "no birthdays today" strip
             would cost a row of the screen every day of the year to say
@@ -588,13 +878,24 @@ export default function TeamScreen() {
                     {manager.designation || "Reporting manager"}
                   </Text>
                 </View>
-                <Badge
-                  label="Manager"
-                  tone={primary}
-                  icon={
-                    <Crown size={11} strokeWidth={2.6} color={primary.tint} />
-                  }
-                />
+                <View className="items-end gap-1">
+                  <Badge
+                    label="Manager"
+                    tone={primary}
+                    icon={
+                      <Crown size={11} strokeWidth={2.6} color={primary.tint} />
+                    }
+                  />
+                  {(() => {
+                    const t = rosterReadable
+                      ? todayOf(
+                          manager._id ? rosterById.get(manager._id) : undefined,
+                        )
+                      : null;
+                    if (!t) return null;
+                    return <Badge label={t.label} tone={t.tone} />;
+                  })()}
+                </View>
               </Pressable>
             </View>
           </View>
@@ -644,14 +945,34 @@ export default function TeamScreen() {
             ) : results.length === 0 ? (
               <EmptyState
                 icon={<Search size={32} strokeWidth={1.6} color={brand[600]} />}
-                title={query ? "No one matches that" : "No teammates yet"}
+                title={
+                  query
+                    ? "No one matches that"
+                    : only === "in"
+                      ? "Nobody has punched in yet"
+                      : only === "out"
+                        ? "Everyone is in"
+                        : "No teammates yet"
+                }
                 message={
                   query
                     ? `Nothing in ${departmentName ?? "your department"} matches "${query.trim()}".`
-                    : "You are the only active person in this department right now."
+                    : only === "in"
+                      ? "No clock-in has come through for your department today."
+                      : only === "out"
+                        ? "Every active person in your department has clocked in."
+                        : "You are the only active person in this department right now."
                 }
-                actionLabel={query ? "Clear search" : undefined}
-                onAction={query ? () => setQuery("") : undefined}
+                actionLabel={
+                  query ? "Clear search" : only !== "all" ? "Show everyone" : undefined
+                }
+                onAction={
+                  query
+                    ? () => setQuery("")
+                    : only !== "all"
+                      ? () => setOnly("all")
+                      : undefined
+                }
               />
             ) : (
               results.map((p) => (
@@ -663,6 +984,9 @@ export default function TeamScreen() {
                     p.employee_id && todayCodes.has(p.employee_id),
                   )}
                   online={isEmpOnline(p.employee_id)}
+                  today={
+                    rosterReadable ? todayOf(rosterById.get(p._id)) : null
+                  }
                   onPress={() => setSelected(p)}
                 />
               ))
@@ -786,6 +1110,7 @@ export default function TeamScreen() {
                 icon={Phone}
                 label="Call"
                 value={phone}
+                sensitive
                 tone={surface.success}
                 onPress={() =>
                   open(`tel:${digitsOf(phone)}`, "Dialer open nahi ho paya.")
@@ -798,6 +1123,7 @@ export default function TeamScreen() {
                 icon={MessageCircle}
                 label="WhatsApp"
                 value={phone as string}
+                sensitive
                 tone={surface.success}
                 onPress={() =>
                   open(`https://wa.me/${wa}`, "WhatsApp open nahi ho paya.")
@@ -810,6 +1136,7 @@ export default function TeamScreen() {
                 icon={Mail}
                 label="Email"
                 value={selected.email}
+                sensitive
                 tone={surface.info}
                 onPress={() =>
                   open(
