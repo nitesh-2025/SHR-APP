@@ -46,17 +46,31 @@ export function RegularizeSheet({
   visible,
   date,
   onClose,
+  defaultType = "missing_clock_out",
+  context,
 }: {
   visible: boolean;
   /** `YYYY-MM-DD`. Empty while the sheet is closed. */
   date: string;
   onClose: () => void;
+  /**
+   * Which option to open on.
+   *
+   * The caller knows what the day WAS — absent, a holiday, a day with a
+   * clock-in and nothing after it — and that is the only place that knowledge
+   * exists. The sheet used to guess "forgot to clock out" for every day, which
+   * is wrong on every absent one, and a wrong pre-filled answer is the answer
+   * that gets submitted.
+   */
+  defaultType?: RegularizationType;
+  /** What the day currently reads as ("Absent", "Holiday") — shown as a chip. */
+  context?: string;
 }) {
   const { c, brand, tint } = useTheme();
   const { height: sheetHeight } = useWindowDimensions();
   const [create, { isLoading }] = useCreateRegularizationMutation();
 
-  const [type, setType] = useState<RegularizationType>("missing_clock_out");
+  const [type, setType] = useState<RegularizationType>(defaultType);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
 
@@ -64,11 +78,11 @@ export function RegularizeSheet({
   // people end up submitting the wrong explanation for the wrong day.
   useEffect(() => {
     if (visible) {
-      setType("missing_clock_out");
+      setType(defaultType);
       setReason("");
       setError("");
     }
-  }, [visible]);
+  }, [visible, defaultType]);
 
   const submit = async () => {
     setError("");
@@ -103,9 +117,28 @@ export function RegularizeSheet({
         <Text style={{ color: c.text }} className={T.section}>
           Regularize
         </Text>
-        <Text style={{ color: c.textMuted }} className={`mt-1 ${T.secondary}`}>
-          {fmtDate(date)}
-        </Text>
+        <View className="mt-1 flex-row items-center gap-2">
+          <Text style={{ color: c.textMuted }} className={T.secondary}>
+            {fmtDate(date)}
+          </Text>
+          {/* What the day reads as right now. Without it the sheet is the same
+              blank form for an absence and for a late arrival, and the reviewer
+              gets a reason written against the wrong picture of the day. */}
+          {context ? (
+            <View
+              style={{ backgroundColor: c.fill, borderRadius: radius.pill }}
+              className="px-2.5 py-0.5"
+            >
+              <Text
+                style={{ color: c.textMuted }}
+                className={T.count}
+                allowFontScaling={false}
+              >
+                {context}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         {error ? (
           <View

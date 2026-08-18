@@ -1,20 +1,21 @@
 import { useNavigation } from "@react-navigation/native";
 import {
   CalendarDays,
-  CalendarPlus,
   CalendarX,
   Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Coffee,
   EllipsisVertical,
   List as ListIcon,
   LogIn,
   LogOut,
   MapPin,
   MessageSquareText,
+  PartyPopper,
   PenLine,
-  Smartphone,
+  Plane,
   Timer,
   TimerReset,
   UserRound,
@@ -28,8 +29,6 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  Modal,
-  Button,
   View,
 } from "react-native";
 import Animated, {
@@ -41,6 +40,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_NAV_CLEARANCE, BottomNav } from "../components/BottomNav";
 import { BottomSheet } from "../components/BottomSheet";
+import { MaskedText } from "../components/MaskedText";
 import { RegularizeSheet } from "../components/RegularizeSheet";
 import { Badge, EmptyState, RangeChip, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
@@ -49,12 +49,16 @@ import {
   useGetMyHistoryQuery,
   useGetMyRegularizationsQuery,
   type AttendanceRecord,
-  type AttendanceStatus,
   type Punch,
   type Regularization,
   type RegularizationStatus,
   type RegularizationType,
 } from "../store/attendanceApi";
+import { useGetMyLeaveCalendarQuery, LEAVE_TYPE_LABEL } from "../store/leaveApi";
+import {
+  useGetHolidaysQuery,
+  useGetWorkCalendarConfigQuery,
+} from "../store/workCalendarApi";
 import {
   radius,
   shadow,
@@ -66,16 +70,22 @@ import {
 import { useTheme } from "../theme/ThemeProvider";
 import { T } from "../theme/type";
 import {
+  buildDayRows,
+  summarise,
+  type DayKind,
+  type DayRow,
+} from "../utils/attendanceDays";
+import {
   fmtDayShort,
   fmtDuration,
   fmtTime,
   monthRange,
   MONTHS,
   MONTHS_LONG,
-  parseYmd,
   WEEKDAYS_LONG,
   ymd,
 } from "../utils/date";
+import { resolveHolidays } from "../utils/holidays";
 
 /**
  * List is the RECORD — every day that happened, newest first.
@@ -363,16 +373,17 @@ function RegularizationCard({
                   Reason
                 </Text>
 
-                <Text
+                {/* A reason is free text a reviewer reads — the same place
+                    a phone number or an account number gets typed in passing. */}
+                <MaskedText
+                  value={item.reason}
                   style={{
                     color: c.textMuted,
                     fontSize: 13,
                     lineHeight: 19,
                     fontWeight: "500",
                   }}
-                >
-                  {item.reason}
-                </Text>
+                />
               </View>
 
               {item.status !== "pending" &&
@@ -484,32 +495,60 @@ function RegularizationCard({
   );
 }
 
-/** Day-cell meaning. `none` = nothing recorded (weekend, holiday, future). */
-type DayKind = "present" | "late" | "absent" | "leave" | "holiday" | "none";
-
-const KIND_TONE: Record<Exclude<DayKind, "none">, Surface> = {
-  present: surface.success,
-  late: surface.warning,
-  absent: surface.danger,
-  leave: surface.purple,
-  holiday: surface.info,
+/**
+ * What a day means, in one table.
+ *
+ * The old vocabulary had a `none` kind that stood for "weekend, holiday, or
+ * future" — three different facts flattened into one blank cell, which is
+ * exactly why the list could not tell an absence from a Sunday. Each reason now
+ * has its own kind, its own colour and its own sentence.
+ */
+const KIND_META: Record<
+  DayKind,
+  { label: string; tone: Surface; icon: LucideIcon }
+> = {
+  present: { label: "Present", tone: surface.success, icon: Check },
+  late: { label: "Late", tone: surface.warning, icon: Clock3 },
+  half_day: { label: "Half day", tone: surface.warning, icon: Timer },
+  absent: { label: "Absent", tone: surface.danger, icon: CalendarX },
+  leave: { label: "On leave", tone: surface.purple, icon: Plane },
+  holiday: { label: "Holiday", tone: surface.info, icon: PartyPopper },
+  weekoff: { label: "Week off", tone: surface.neutral, icon: Coffee },
+  future: { label: "—", tone: surface.muted, icon: CalendarDays },
 };
 
-const LEGEND: [string, Surface][] = [
-  ["Present", surface.success],
-  ["Late", surface.warning],
-  ["Absent", surface.danger],
-  ["Leave", surface.purple],
-  ["Holiday", surface.info],
+/** Legend order follows how often a day is each thing, not the enum. */
+const LEGEND: DayKind[] = [
+  "present",
+  "late",
+  "absent",
+  "leave",
+  "holiday",
+  "weekoff",
 ];
 
-const STATUS_TONE: Record<AttendanceStatus, { label: string; tone: Surface }> =
-  {
-    present: { label: "Present", tone: surface.success },
-    in_progress: { label: "Running", tone: surface.success },
-    half_day: { label: "Half Day", tone: surface.warning },
-    absent: { label: "Absent", tone: surface.danger },
-  };
+/**
+ * The one line under the weekday that says what happened.
+ *
+ * Every kind gets a real sentence — "No attendance" used to be printed for a
+ * Sunday as readily as for a genuine absence, which made the list impossible to
+ * trust at a glance.
+ */
+function summaryOf(row: DayRow): string {
+  if (row.record && (row.record.clock_in?.at || row.record.status !== "absent")) {
+    const worked = fmtDuration(row.record.total_work_minutes);
+    return row.record.state === "clocked_out"
+      ? `${worked} worked`
+      : `${worked} so far`;
+  }
+  if (row.kind === "leave") {
+    const type = row.leave?.type;
+    return type ? LEAVE_TYPE_LABEL[type] : "Approved leave";
+  }
+  if (row.kind === "holiday") return row.holidayName ?? "Company holiday";
+  if (row.kind === "weekoff") return "Weekly off";
+  return "Nothing was recorded";
+}
 
 /** Years offered in the dropdown, newest first. */
 const YEAR_SPAN = 4;
@@ -562,15 +601,40 @@ async function openMap(url: string) {
  * A PAST day left open (forgot to clock out) is the opposite case, and the
  * single most common reason to file one — so state alone cannot be the test.
  */
-function canRegularize(
-  dateKey: string,
-  todayKey: string,
-  record?: AttendanceRecord,
-): boolean {
-  if (dateKey > todayKey) return false;
-  if (dateKey !== todayKey) return true;
+function canRegularize(row: DayRow, todayKey: string): boolean {
+  if (row.key > todayKey) return false;
+  if (row.key !== todayKey) return true;
   // Today: only once the day has actually been closed out.
-  return Boolean(record) && record?.state === "clocked_out";
+  return row.record?.state === "clocked_out";
+}
+
+/**
+ * Which request type the sheet should open on for this day.
+ *
+ * A guess, not a decision — every option stays selectable. But the guess
+ * matters: on an absent day the reviewer needs a clock-IN, and on a holiday or
+ * a weekly off the honest request is "I was on duty", neither of which is the
+ * "forgot to clock out" the sheet used to default to for every single day.
+ */
+function suggestedType(row: DayRow): RegularizationType {
+  if (row.kind === "absent") return "missing_clock_in";
+  if (row.kind === "holiday" || row.kind === "weekoff") return "on_duty";
+  if (row.record && !row.record.clock_out?.at) return "missing_clock_out";
+  if (row.record?.is_late) return "late_waiver";
+  return "missing_clock_out";
+}
+
+/**
+ * What the correction button should SAY on this day.
+ *
+ * A missing punch and a Sunday you actually worked are both regularizations,
+ * but they are not the same request, and one label for both leaves the reader
+ * guessing whether the button even applies to them.
+ */
+function regularizeLabel(row: DayRow): string {
+  if (row.kind === "absent") return "Mark my attendance";
+  if (row.kind === "holiday" || row.kind === "weekoff") return "I worked this day";
+  return "Regularize";
 }
 
 /* ── Stat card ────────────────────────────────────────────────────────────── */
@@ -695,13 +759,19 @@ function StatCardInline({
 /* ── Regularize button ────────────────────────────────────────────────────── */
 
 /** Same affordance on both tabs, so the action is learned once. */
-function RegularizeButton({ onPress }: { onPress: () => void }) {
-  const { c, brand, tint } = useTheme();
+function RegularizeButton({
+  onPress,
+  label = "Regularize",
+}: {
+  onPress: () => void;
+  label?: string;
+}) {
+  const { brand, tint } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Request a correction for this day"
+      accessibilityLabel={`${label}. Request a correction for this day`}
       style={({ pressed }) => ({
         backgroundColor: tint.bg,
         borderRadius: radius.pill,
@@ -711,7 +781,7 @@ function RegularizeButton({ onPress }: { onPress: () => void }) {
     >
       <PenLine size={13} strokeWidth={2.4} color={brand[600]} />
       <Text style={{ color: brand[700] }} className={T.badge}>
-        Regularize
+        {label}
       </Text>
     </Pressable>
   );
@@ -839,41 +909,54 @@ function Total({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * One day, as a card.
+ * One DAY, whatever happened on it.
  *
- * Laid out the way the day happened rather than as a grid of figures: a date
- * block to anchor it, the two punches as their own rows with room for a real
- * address under each, then the totals, then anything that went wrong.
- *
- * The four-column version squeezed "Clock In / Clock Out / Break / Work Hrs"
- * into ~78px each on a 360dp screen, which left every value truncated and the
- * addresses with nowhere to live.
+ * This used to take an `AttendanceRecord`, which is why the list could only
+ * ever show days the server had a row for: an absence, a Sunday, a holiday and
+ * a day on approved leave all produce NO record, so all four were invisible —
+ * and an invisible day cannot be tapped, expanded, or regularized. It now takes
+ * a calendar row instead, and the record is just one of the things that row may
+ * carry.
  */
 function DayCard({
-  record,
+  row,
   expanded,
   onToggle,
   onRegularize,
 }: {
-  record: AttendanceRecord;
+  row: DayRow;
   expanded: boolean;
   onToggle: () => void;
   onRegularize?: () => void;
 }) {
   const { c, dark } = useTheme();
-  const date = parseYmd(record.date);
-  const status = STATUS_TONE[record.status] ?? STATUS_TONE.absent;
-  const absent = record.status === "absent";
-  const hasFlags = record.is_late || record.is_manual;
+  const record = row.record;
+  const meta = KIND_META[row.kind];
+  const tone = toneFor(meta.tone, dark);
+  const date = row.date;
+  const punched = Boolean(record?.clock_in?.at || record?.clock_out?.at);
+  const hasFlags = Boolean(record?.is_late || record?.is_manual);
 
   return (
-    <Pressable onPress={onToggle} accessibilityRole="button">
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={`${WEEKDAYS_LONG[date.getDay()]} ${date.getDate()} ${
+        MONTHS[date.getMonth()]
+      }. ${meta.label}. ${summaryOf(row)}`}
+    >
       <View
         style={{
           backgroundColor: c.card,
           borderWidth: 1,
           borderRadius: 4,
           borderColor: c.border,
+          // A left edge in the day's colour. The badge alone sits at the far
+          // right of a 360dp row, so a column of days could not be skimmed for
+          // "which ones went wrong" without reading every line to its end.
+          borderLeftWidth: 3,
+          borderLeftColor: row.kind === "future" ? c.border : tone.tint,
           padding: space.lg,
           ...(dark ? shadow.none : shadow.soft),
         }}
@@ -881,7 +964,12 @@ function DayCard({
         {/* ── Head ─────────────────────────────────────────────────────────── */}
         <View className="flex-row items-center gap-3">
           <View
-            style={{ backgroundColor: c.fill, borderRadius: radius.well }}
+            style={{
+              backgroundColor: row.isToday ? tone.bg : c.fill,
+              borderRadius: radius.well,
+              borderWidth: row.isToday ? 1 : 0,
+              borderColor: tone.border,
+            }}
             className="h-12 w-12 items-center justify-center"
           >
             <Text
@@ -889,83 +977,130 @@ function DayCard({
               className={T.cardTitle}
               allowFontScaling={false}
             >
-              {date ? date.getDate() : "--"}
+              {date.getDate()}
             </Text>
             <Text
               style={{ color: c.textMuted }}
               className={T.nano}
               allowFontScaling={false}
             >
-              {date ? MONTHS[date.getMonth()] : ""}
+              {MONTHS[date.getMonth()]}
             </Text>
           </View>
 
           <View className="flex-1">
-            <Text
-              style={{ color: c.text }}
-              className={T.cardTitleSm}
-              numberOfLines={1}
-            >
-              {date ? WEEKDAYS_LONG[date.getDay()] : record.date}
-            </Text>
+            <View className="flex-row items-center gap-1.5">
+              <Text
+                style={{ color: c.text }}
+                className={T.cardTitleSm}
+                numberOfLines={1}
+              >
+                {WEEKDAYS_LONG[date.getDay()]}
+              </Text>
+              {row.isToday ? (
+                <Text style={{ color: c.textFaint }} className={T.micro}>
+                  (today)
+                </Text>
+              ) : null}
+            </View>
             <Text
               style={{ color: c.textMuted }}
               className={`mt-0.5 ${T.micro}`}
               numberOfLines={1}
             >
-              {absent
-                ? "No attendance"
-                : `${fmtDuration(record.total_work_minutes)} worked`}
+              {summaryOf(row)}
             </Text>
           </View>
 
-          <Badge label={status.label} tone={status.tone} />
+          <Badge label={meta.label} tone={meta.tone} />
         </View>
 
-        {expanded && !absent ? (
+        {expanded ? (
           <>
             <View style={{ backgroundColor: c.border }} className="my-3 h-px" />
 
-            <View className="flex-row items-center gap-3">
-              <PunchCol
-                icon={LogIn}
-                label="Clock In"
-                time={fmtTime(record.clock_in?.at)}
-                tone={surface.success}
-              />
-              <PunchCol
-                icon={LogOut}
-                label="Clock Out"
-                time={fmtTime(record.clock_out?.at)}
-                tone={surface.danger}
-              />
-            </View>
+            {punched ? (
+              <>
+                <View className="flex-row items-center gap-3">
+                  <PunchCol
+                    icon={LogIn}
+                    label="Clock In"
+                    time={fmtTime(record?.clock_in?.at)}
+                    tone={surface.success}
+                  />
+                  <PunchCol
+                    icon={LogOut}
+                    label="Clock Out"
+                    time={fmtTime(record?.clock_out?.at)}
+                    tone={surface.danger}
+                  />
+                </View>
 
-            <Where punch={record.clock_in} label="In" />
-            <Where punch={record.clock_out} label="Out" />
+                <Where punch={record?.clock_in} label="In" />
+                <Where punch={record?.clock_out} label="Out" />
 
-            <View
-              style={{
-                backgroundColor: c.fill,
-                borderRadius: radius.well,
-                paddingHorizontal: space.md,
-                paddingVertical: space.sm + 2,
-              }}
-              className="mt-3 flex-row items-center gap-3"
-            >
-              <Total
-                label="Break"
-                value={fmtDuration(record.total_break_minutes ?? 0)}
-              />
+                <View
+                  style={{
+                    backgroundColor: c.fill,
+                    borderRadius: radius.well,
+                    paddingHorizontal: space.md,
+                    paddingVertical: space.sm + 2,
+                  }}
+                  className="mt-3 flex-row items-center gap-3"
+                >
+                  <Total
+                    label="Break"
+                    value={fmtDuration(record?.total_break_minutes ?? 0)}
+                  />
+                  <View
+                    style={{ backgroundColor: c.border }}
+                    className="h-7 w-px"
+                  />
+                  <Total
+                    label="Worked"
+                    value={fmtDuration(record?.total_work_minutes ?? 0)}
+                  />
+                </View>
+              </>
+            ) : (
+              /* ── Nothing was punched ───────────────────────────────────
+                 The reason, in the day's own colour, instead of an empty
+                 expansion. A card that opens onto nothing reads as broken —
+                 and on an absent day the reason IS the thing to act on. */
               <View
-                style={{ backgroundColor: c.border }}
-                className="h-7 w-px"
-              />
-              <Total
-                label="Worked"
-                value={fmtDuration(record.total_work_minutes)}
-              />
-            </View>
+                style={{
+                  backgroundColor: tone.bg,
+                  borderRadius: radius.well,
+                  borderWidth: 1,
+                  borderColor: tone.border,
+                  padding: space.md,
+                }}
+                className="flex-row items-start gap-2.5"
+              >
+                <meta.icon size={16} strokeWidth={2.2} color={tone.tint} />
+                <View className="flex-1">
+                  <Text style={{ color: tone.text }} className={T.cardTitleSm}>
+                    {row.kind === "absent"
+                      ? "No punches on this day"
+                      : meta.label}
+                  </Text>
+                  <Text
+                    style={{ color: c.textMuted }}
+                    className={`mt-0.5 leading-5 ${T.caption}`}
+                  >
+                    {row.kind === "absent"
+                      ? "Neither a clock-in nor an approved leave. Raise a correction if you were working."
+                      : row.kind === "leave"
+                        ? `Approved leave${
+                            row.leave?.reason ? ` — ${row.leave.reason}` : ""
+                          }. No punch was expected.`
+                        : row.kind === "holiday"
+                          ? `${row.holidayName ?? "Company holiday"} — no punch was expected.`
+                          : "A weekly off under your work calendar — no punch was expected."}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {hasFlags || onRegularize ? (
               <View className="mt-3 flex-row flex-wrap items-center justify-between gap-2">
@@ -973,13 +1108,13 @@ function DayCard({
                   className="flex-row flex-wrap items-center"
                   style={{ gap: space.sm }}
                 >
-                  {record.is_late ? (
+                  {record?.is_late ? (
                     <Badge
                       label={`Late by ${fmtDuration(record.late_by_minutes)}`}
                       tone={surface.warning}
                     />
                   ) : null}
-                  {record.is_manual ? (
+                  {record?.is_manual ? (
                     <Badge
                       label={`Approved${record.marked_by_name ? ` · ${record.marked_by_name}` : ""}`}
                       tone={surface.info}
@@ -995,7 +1130,10 @@ function DayCard({
                 </View>
 
                 {onRegularize ? (
-                  <RegularizeButton onPress={onRegularize} />
+                  <RegularizeButton
+                    onPress={onRegularize}
+                    label={regularizeLabel(row)}
+                  />
                 ) : null}
               </View>
             ) : null}
@@ -1079,8 +1217,16 @@ export default function AttendanceScreen() {
 
   const [monthOpen, setMonthOpen] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
-  /** Empty while closed — the sheet regularises exactly one date. */
-  const [regularizeDate, setRegularizeDate] = useState("");
+  /**
+   * The day being corrected, or null while the sheet is closed.
+   *
+   * The whole ROW, not just its date: the sheet opens on a different request
+   * type depending on what the day was. "Forgot to clock out" is the right
+   * guess for a day with a clock-in and nothing after it, and exactly the wrong
+   * one for a Sunday you came in on — and a pre-filled wrong answer is the one
+   * people submit.
+   */
+  const [regularizeRow, setRegularizeRow] = useState<DayRow | null>(null);
 
   /**
    * Ask for the month on screen, not the year around it.
@@ -1124,6 +1270,25 @@ export default function AttendanceScreen() {
     [regItems],
   );
 
+  /**
+   * The three things that explain a day WITHOUT an attendance record.
+   *
+   * Absent, on leave, a holiday and a weekly off all arrive from the server as
+   * the same thing — nothing — so the list could not tell them apart and simply
+   * dropped all four. Two of these are cached app-wide and effectively free
+   * (the holiday master and the work-calendar policy barely change in a year);
+   * the leave calendar is the only per-range request, and it is one call for
+   * the whole month.
+   */
+  const calendarConfig = useGetWorkCalendarConfigQuery();
+  const holidayMaster = useGetHolidaysQuery();
+  const leaveCalendar = useGetMyLeaveCalendarQuery(range);
+
+  const holidays = useMemo(
+    () => resolveHolidays(holidayMaster.data, year),
+    [holidayMaster.data, year],
+  );
+
   const items = useMemo(() => data?.items ?? [], [data]);
   const byDate = useMemo(() => {
     const map = new Map<string, AttendanceRecord>();
@@ -1131,30 +1296,42 @@ export default function AttendanceScreen() {
     return map;
   }, [items]);
 
-  // Newest first — a list of days reads backwards from today, not forwards
-  // from January. The server already scoped the range, so there is nothing left
-  // to filter here.
+  /**
+   * Every day in the range, newest first — records joined onto the calendar
+   * rather than the other way round. This is the list.
+   */
   const listItems = useMemo(
-    () => [...items].sort((a, b) => b.date.localeCompare(a.date)),
-    [items],
+    () =>
+      buildDayRows({
+        from: range.from,
+        to: range.to,
+        records: byDate,
+        holidays,
+        leaves: leaveCalendar.data ?? [],
+        config: calendarConfig.data,
+        todayKey,
+      }),
+    [
+      range.from,
+      range.to,
+      byDate,
+      holidays,
+      leaveCalendar.data,
+      calendarConfig.data,
+      todayKey,
+    ],
   );
+
+  /** Day → row, so the calendar grid and the list agree by construction. */
+  const rowByDate = useMemo(() => {
+    const map = new Map<string, DayRow>();
+    for (const r of listItems) map.set(r.key, r);
+    return map;
+  }, [listItems]);
 
   // Stats follow whatever the list is showing, so the numbers always describe
   // the rows underneath them.
-  const stats = useMemo(() => {
-    let present = 0;
-    let late = 0;
-    let absent = 0;
-    let minutes = 0;
-    for (const r of listItems) {
-      if (r.status === "present" || r.status === "in_progress") present += 1;
-      else if (r.status === "half_day") present += 0.5;
-      else if (r.status === "absent") absent += 1;
-      if (r.is_late) late += 1;
-      minutes += r.total_work_minutes ?? 0;
-    }
-    return { present, late, absent, minutes };
-  }, [listItems]);
+  const stats = useMemo(() => summarise(listItems), [listItems]);
 
   const cells = useMemo(() => {
     const first = new Date(year, gridMonth, 1);
@@ -1165,18 +1342,8 @@ export default function AttendanceScreen() {
     ];
   }, [year, gridMonth]);
 
-  const kindOf = (record?: AttendanceRecord): DayKind => {
-    if (!record) return "none";
-    if (record.status === "absent") return "absent";
-    if (record.is_late || record.status === "half_day") return "late";
-    return "present";
-  };
-
-  const selected = selectedDay ? byDate.get(selectedDay) : undefined;
-  const selectedDate = parseYmd(selectedDay ?? undefined);
-  const selectedStatus = selected
-    ? (STATUS_TONE[selected.status] ?? STATUS_TONE.absent)
-    : null;
+  /** The day the calendar has focus on — its card is drawn under the grid. */
+  const selectedRow = selectedDay ? rowByDate.get(selectedDay) : undefined;
 
   const years = Array.from(
     { length: YEAR_SPAN },
@@ -1189,10 +1356,30 @@ export default function AttendanceScreen() {
     setMonth(next);
   };
 
+  /**
+   * The list waits for the POLICY, not just the punches.
+   *
+   * Rendering as soon as the records land would draw every Sunday as "Absent"
+   * for the split second before the work calendar arrives, then silently
+   * re-colour it. A wrong answer shown confidently and corrected later is worse
+   * than a skeleton — this is somebody's attendance record.
+   */
+  const listLoading =
+    isLoading || calendarConfig.isLoading || leaveCalendar.isLoading;
+
+  const refreshAll = () => {
+    refetch();
+    leaveCalendar.refetch();
+    calendarConfig.refetch();
+    holidayMaster.refetch();
+  };
+
   const refresher = (
     <RefreshControl
-      refreshing={isFetching && !isLoading}
-      onRefresh={refetch}
+      refreshing={
+        (isFetching || leaveCalendar.isFetching) && !listLoading
+      }
+      onRefresh={refreshAll}
       tintColor={brand[600]}
     />
   );
@@ -1317,7 +1504,7 @@ export default function AttendanceScreen() {
                 paddingBottom: space.xl,
               }}
             >
-              {isLoading ? (
+              {listLoading ? (
                 <>
                   <Skeleton
                     height={118}
@@ -1349,6 +1536,9 @@ export default function AttendanceScreen() {
                     label="Late Arrivals"
                     tone={surface.warning}
                   />
+                  {/* Absences now count UNRECORDED working days, not only the
+                      rows the server sent with `status: absent` — a month with
+                      no punches at all used to report zero and read as clean. */}
                   <StatCardInline
                     icon={CalendarX}
                     value={String(stats.absent).padStart(2, "0")}
@@ -1356,20 +1546,33 @@ export default function AttendanceScreen() {
                     tone={surface.danger}
                   />
                   <StatCardInline
+                    icon={Plane}
+                    value={String(stats.leave).padStart(2, "0")}
+                    label="On Leave"
+                    tone={surface.purple}
+                  />
+                  <StatCardInline
+                    icon={Coffee}
+                    value={String(stats.off).padStart(2, "0")}
+                    label="Offs & Holidays"
+                    tone={surface.info}
+                  />
+                  <StatCardInline
                     icon={CalendarDays}
                     value={fmtDuration(stats.minutes)}
                     label="Total Worked"
-                    tone={surface.purple}
+                    tone={surface.neutral}
                   />
                 </>
               )}
             </ScrollView>
 
-            {isLoading ? (
+            {listLoading ? (
               <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
-                <Skeleton height={150} radius={radius.card} />
-                <Skeleton height={150} radius={radius.card} />
-                <Skeleton height={150} radius={radius.card} />
+                <Skeleton height={92} radius={radius.card} />
+                <Skeleton height={92} radius={radius.card} />
+                <Skeleton height={92} radius={radius.card} />
+                <Skeleton height={92} radius={radius.card} />
               </View>
             ) : listItems.length === 0 ? (
               <EmptyState
@@ -1380,28 +1583,33 @@ export default function AttendanceScreen() {
                     color={brand[600]}
                   />
                 }
-                title="No attendance yet"
+                title={error ? "Could not load this month" : "Nothing here yet"}
                 message={
                   error
                     ? describeApiError(error).title
-                    : `Nothing recorded in ${
+                    : `${
                         month === null ? year : `${MONTHS_LONG[month]} ${year}`
-                      }.`
+                      } has not started yet.`
                 }
+                actionLabel={error ? "Try again" : undefined}
+                onAction={error ? refreshAll : undefined}
               />
             ) : (
               <View style={{ paddingHorizontal: space.screen, gap: space.md }}>
+                {/* Keyed by DATE, not by record id: an absent day has no record
+                    and therefore no id, and two of them would collide on
+                    `undefined`. The date is the row's real identity anyway. */}
                 {listItems.map((r) => (
                   <DayCard
-                    key={r._id}
-                    record={r}
-                    expanded={expandedId === r._id}
+                    key={r.key}
+                    row={r}
+                    expanded={expandedId === r.key}
                     onToggle={() =>
-                      setExpandedId(expandedId === r._id ? null : r._id)
+                      setExpandedId(expandedId === r.key ? null : r.key)
                     }
                     onRegularize={
-                      canRegularize(r.date, todayKey, r)
-                        ? () => setRegularizeDate(r.date)
+                      canRegularize(r, todayKey)
+                        ? () => setRegularizeRow(r)
                         : undefined
                     }
                   />
@@ -1568,14 +1776,18 @@ export default function AttendanceScreen() {
 
                       const key = ymd(new Date(year, gridMonth, day));
 
-                      const record = byDate.get(key);
-                      const kind = kindOf(record);
+                      // The grid and the list are now the SAME data. They used
+                      // to run two different classifiers over the same records,
+                      // which is how a day could be blank here and absent there.
+                      const row = rowByDate.get(key);
+                      const record = row?.record;
+                      const kind = row?.kind ?? "future";
 
                       const isSelected = key === selectedDay;
                       const isToday = key === ymd(today);
 
                       const statusColor =
-                        kind === "none" ? "transparent" : KIND_TONE[kind].tint;
+                        kind === "future" ? "transparent" : KIND_META[kind].tone.tint;
 
                       return (
                         <Pressable
@@ -1666,9 +1878,9 @@ export default function AttendanceScreen() {
                       marginTop: 14,
                     }}
                   >
-                    {LEGEND.map(([label, tone]) => (
+                    {LEGEND.map((k) => (
                       <View
-                        key={label}
+                        key={k}
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
@@ -1676,7 +1888,6 @@ export default function AttendanceScreen() {
                           paddingHorizontal: 8,
                           paddingVertical: 7,
                           borderRadius: 999,
-                          // backgroundColor: c.fill,
                         }}
                       >
                         <View
@@ -1684,7 +1895,7 @@ export default function AttendanceScreen() {
                             width: 7,
                             height: 7,
                             borderRadius: 4,
-                            backgroundColor: tone.tint,
+                            backgroundColor: KIND_META[k].tone.tint,
                           }}
                         />
 
@@ -1695,12 +1906,33 @@ export default function AttendanceScreen() {
                             fontWeight: "600",
                           }}
                         >
-                          {label}
+                          {KIND_META[k].label}
                         </Text>
                       </View>
                     ))}
                   </View>
                 </View>
+
+                {/* ── The selected day ─────────────────────────────────
+                    Tapping a date used to do nothing but move a highlight —
+                    the calendar could SHOW you an absence and then offer no
+                    way to act on it. The same card the list uses is drawn
+                    here, already open, so "tap the day, fix the day" works
+                    from either view. */}
+                {selectedRow ? (
+                  <View style={{ marginTop: space.md }}>
+                    <DayCard
+                      row={selectedRow}
+                      expanded
+                      onToggle={() => setSelectedDay(null)}
+                      onRegularize={
+                        canRegularize(selectedRow, todayKey)
+                          ? () => setRegularizeRow(selectedRow)
+                          : undefined
+                      }
+                    />
+                  </View>
+                ) : null}
               </View>
             </ScrollView>
           </TabPane>
@@ -1787,9 +2019,11 @@ export default function AttendanceScreen() {
       />
 
       <RegularizeSheet
-        visible={Boolean(regularizeDate)}
-        date={regularizeDate}
-        onClose={() => setRegularizeDate("")}
+        visible={Boolean(regularizeRow)}
+        date={regularizeRow?.key ?? ""}
+        defaultType={regularizeRow ? suggestedType(regularizeRow) : undefined}
+        context={regularizeRow ? KIND_META[regularizeRow.kind].label : undefined}
+        onClose={() => setRegularizeRow(null)}
       />
 
       {/* ── View menu ────────────────────────────────────────────────────────
