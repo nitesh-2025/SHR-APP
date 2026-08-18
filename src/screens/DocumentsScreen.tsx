@@ -28,6 +28,7 @@ import {
   isImageUrl,
 } from "../components/DocumentPreview";
 import { DocumentUploadSheet } from "../components/DocumentUploadSheet";
+import { MaskedValue } from "../components/MaskedValue";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { Badge, EmptyState, Skeleton } from "../components/ui";
 import { describeApiError } from "../lib/apiError";
@@ -79,21 +80,6 @@ interface Row {
    */
   verified: boolean | null;
   uploadedAt?: string;
-}
-
-/**
- * Show the last four characters only.
- *
- * A PAN or an Aadhaar number rendered in full sits in a screenshot, in a
- * screen-share, and over someone's shoulder on a train. The last four are
- * enough to confirm HR holds the right document, which is the only question
- * this screen exists to answer.
- */
-function mask(value?: string): string | undefined {
-  const v = String(value ?? "").trim();
-  if (!v) return undefined;
-  if (v.length <= 4) return v;
-  return `•••• ${v.slice(-4)}`;
 }
 
 /**
@@ -192,18 +178,26 @@ function DocRow({
           ) : null}
         </View>
 
+        {/* The number is the row's payload — it used to be the first fragment
+            of a "•••• 9518 · PDF · Added 12 Aug" string, where the one fact
+            somebody opened the screen to check was formatted exactly like the
+            file extension next to it. Its own line, its own weight, and its
+            own copy button. */}
+        {row.number ? (
+          <View className="mt-1">
+            <MaskedValue value={row.number} label={row.label} />
+          </View>
+        ) : null}
+
         <Text
-          style={{ color: c.textMuted }}
+          style={{ color: c.textFaint }}
           className={`mt-0.5 ${T.micro}`}
           numberOfLines={1}
         >
-          {[
-            row.number,
-            ext || null,
-            row.uploadedAt ? `Added ${fmtDayShort(row.uploadedAt)}` : null,
-          ]
+          {[ext || null, row.uploadedAt ? `Added ${fmtDayShort(row.uploadedAt)}` : null]
             .filter(Boolean)
-            .join(" · ") || (row.url ? "On file" : "Not uploaded")}
+            .join(" · ") ||
+            (row.number ? "" : row.url ? "On file" : "Not uploaded")}
         </Text>
       </View>
 
@@ -309,7 +303,7 @@ export default function DocumentsScreen() {
       out.push({
         key: `statutory:${String(s.key)}`,
         label: s.label,
-        number: mask(entry.number),
+        number: entry.number || undefined,
         url: entry.url || undefined,
         verified: null,
       });
@@ -319,7 +313,7 @@ export default function DocumentsScreen() {
       out.push({
         key: `doc:${i}:${d.type}`,
         label: d.label || DOC_LABEL[d.type] || "Document",
-        number: mask(d.number),
+        number: d.number || undefined,
         url: d.file_url || undefined,
         verified: Boolean(d.is_verified),
         uploadedAt: d.uploaded_at,

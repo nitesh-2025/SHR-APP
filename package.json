@@ -1,5 +1,5 @@
 {
-  "name": "broker-app",
+  "name": "shr-app",
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
@@ -11,6 +11,7 @@
     "@shopify/flash-list": "2.0.2",
     "@tanstack/react-query": "^5.101.4",
     "expo": "~57.0.8",
+    "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.7",
     "expo-device": "~57.0.1",
     "expo-document-picker": "~57.0.1",
